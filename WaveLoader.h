@@ -242,6 +242,7 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 	unsigned int* UvIndices = malloc(1 * sizeof(unsigned int));
 	unsigned int* NormalIndices = malloc(1 * sizeof(unsigned int));
 
+	int WaveHasMaterial = 1;
 	int MaterialCount = -1;
 	WaveModelMaterial* Material = malloc(1 * sizeof(WaveModelMaterial));
 	
@@ -263,7 +264,10 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 			
 			FILE* MatFile = fopen(Path, "r");
 			if (!MatFile)
+			{
+				WaveHasMaterial = 0;
 				goto NoMatterial;
+			}
 
 			while (1)
 			{
@@ -431,10 +435,11 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 		unsigned int VertexIndex = VertexIndices[i];
 		Data.Vertices[i] = TempVertices[VertexIndex - 1];
 
-		if (TempMaterial[Pos].Pos == i)
+		if (TempMaterial[Pos].Pos == i && WaveHasMaterial)
 			Pos++;
 		
-		Data.Material[i] = Material[Pos - 1];
+		if (Settings & WAVE_LOAD_MATERIAL && WaveHasMaterial)
+			Data.Material[i] = Material[Pos - 1];
 	}
 
 	if ((Settings & WAVE_GEN_NORMALS) && NormalIndicesCount == 0)

@@ -15,7 +15,7 @@ Proj = PerspectivMatrix(Aspect, 75.0, 0.01, 10000.0);
 vec3 A = { 0.0, 0.0, 1.0 };
 vec3 B = { 11.0, 2.0, 1.0 };
 
-vec3 Res = Add(A, B);
+vec3 Res = Add3(A, B);
 
 ```
 WaveLoader is a basic C OBJ Loader it can Load Triangulated Models with their Material.

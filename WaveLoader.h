@@ -1,6 +1,7 @@
 #include <stdio.h>
-#include <math.h>
+#include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define WAVEMAX(x, y) (((x) > (y)) ? (x) : (y))
 #define WAVEMIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -98,7 +99,7 @@ typedef struct
 	unsigned int Pos;
 } TempMaterialDescription;
 
-WaveVec3* WaveGenUVs(int VerticesCount, WaveVec3* Vertices, WaveVec3* Normals)
+WaveVec3* WaveGenUVs(unsigned int VerticesCount, WaveVec3* Vertices, WaveVec3* Normals)
 {
 	WaveVec3* TexCoord = malloc(VerticesCount * sizeof(WaveVec3));
 
@@ -198,7 +199,7 @@ WaveVec3* WaveGenUVs(int VerticesCount, WaveVec3* Vertices, WaveVec3* Normals)
 	return TexCoord;
 }
 
-WaveVec3* WaveGenNormals(int VerticesCount, WaveVec3* Vertices)
+WaveVec3* WaveGenNormals(unsigned int VerticesCount, WaveVec3* Vertices)
 {
 	WaveVec3* Normals = malloc(VerticesCount * sizeof(WaveVec3));
 
@@ -222,7 +223,7 @@ WaveVec3* WaveGenNormals(int VerticesCount, WaveVec3* Vertices)
 	return Normals;
 }
 
-WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
+WaveModelData WaveLoadOBJ(const char* Path, enum WaveSettings Settings)
 {
 	FILE* File = fopen(Path, "r");
 	if (!File)
@@ -257,7 +258,7 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 		if (Res == EOF)
 			break;
 
-		if (strcmp(LineHeader, "mtllib") == 0 && Settings & WAVE_LOAD_MATERIAL)
+		if (strcmp(LineHeader, "mtllib") == 0 && (Settings & WAVE_LOAD_MATERIAL))
 		{
 			char Path[2048];
 			fscanf(File, "%s\n", &Path);
@@ -276,7 +277,6 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 				int MatRes = fscanf(MatFile, "%s", MatLineHeader);
 				if (MatRes == EOF)
 					break;
-	
 				
 				if (strcmp(MatLineHeader, "Ka") == 0)
 					fscanf(MatFile, "%f %f %f\n", &Material[MaterialCount].AmbientColor.x, &Material[MaterialCount].AmbientColor.y, &Material[MaterialCount].AmbientColor.z);
@@ -322,7 +322,7 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 		}
 		NoMatterial:
 
-		if (strcmp(LineHeader, "usemtl") == 0)
+		if (strcmp(LineHeader, "usemtl") == 0 && Settings & WAVE_LOAD_MATERIAL)
 		{
 			fscanf(File, "%s\n", &TempMaterial[TempMaterialCount].Name);
 			TempMaterial[TempMaterialCount].Pos = VertexIndicesCount;
@@ -399,25 +399,16 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 	WaveModelData Data;
 	Data.Material = malloc(VertexIndicesCount * sizeof(WaveModelMaterial));
 	Data.VerticeCount = VertexIndicesCount;
-	Data.TexCoordCount = UvIndicesCount;
-	Data.NormalCount = NormalIndicesCount;
+	Data.TexCoordCount = VertexIndicesCount;
+	Data.NormalCount = VertexIndicesCount;
 
 	Data.Vertices = malloc(VertexIndicesCount * sizeof(WaveVec3));
-
-	if (UvIndicesCount == 0)
-		Data.TexCoords = malloc(VertexIndicesCount * sizeof(WaveVec3));
-	else
-		Data.TexCoords = malloc(UvIndicesCount * sizeof(WaveVec3));
-
-	if (NormalIndicesCount == 0)
-		Data.Normals = malloc(VertexIndicesCount * sizeof(WaveVec3));
-	else
-		Data.Normals = malloc(NormalIndicesCount * sizeof(WaveVec3));
-
+	Data.TexCoords = malloc(VertexIndicesCount * sizeof(WaveVec3));
+	Data.Normals = malloc(VertexIndicesCount * sizeof(WaveVec3));
 	
 	for (unsigned int i = 0; i < TempMaterialCount; i++)
 	{
-		for (int j = 0; j < MaterialCount; j++)
+		for (int j = 0; j < MaterialCount+1; j++)
 		{
 			if (strcmp(TempMaterial[i].Name, Material[j].MaterialName) == 0)
 			{
@@ -428,43 +419,70 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 		}
 	}
 
+//	for (unsigned int i = 0; i < TempMaterialCount; i++)
+//		printf("%s\n", TempMaterial[i].Name);
+//
+//	printf("\n\n");
+//
+//	for (unsigned int i = 0; i < MaterialCount+1; i++)
+//		printf("%s\n", Material[i].MaterialName);
+
+	WaveModelMaterial EmptyMaterial = 
+	{ 
+		"Default", 
+		{ 1.0, 1.0, 1.0 }, 
+		{ 1.0, 1.0, 1.0 }, 
+		1.0, 
+		{ 1.0, 1.0, 1.0 }, 
+		"NoTexture", 
+		"NoTexture", 
+		"NoTexture", 
+		"NoTexture", 
+		"NoTexture", 
+		"NoTexture" 
+	};
+
 	int Pos = 0;
+
+	if ((Settings & WAVE_GEN_NORMALS) && NormalIndicesCount == 0)
+		Data.Normals = WaveGenNormals(VertexIndicesCount, Data.Vertices);
+
+	if ((Settings & WAVE_GEN_UVS) && UvIndicesCount == 0)
+		Data.TexCoords = WaveGenUVs(VertexIndicesCount, Data.Vertices, Data.Normals);
 
 	for (unsigned int i = 0; i < VertexIndicesCount; i++)
 	{
 		unsigned int VertexIndex = VertexIndices[i];
 		Data.Vertices[i] = TempVertices[VertexIndex - 1];
 
-		if (TempMaterial[Pos].Pos == i && WaveHasMaterial)
-			Pos++;
-		
-		if (Settings & WAVE_LOAD_MATERIAL && WaveHasMaterial)
-			Data.Material[i] = Material[Pos - 1];
-	}
-
-	if ((Settings & WAVE_GEN_NORMALS) && NormalIndicesCount == 0)
-		Data.Normals = WaveGenNormals(VertexIndicesCount, Data.Vertices);
-
-	for (unsigned int i = 0; i < NormalIndicesCount; i++)
-	{
-		unsigned int NormalIndex = NormalIndices[i];
-		Data.Normals[i] = TempNormals[NormalIndex - 1];
-	}
-
-	if ((Settings & WAVE_GEN_UVS) && UvIndicesCount == 0)
-		Data.TexCoords = WaveGenUVs(VertexIndicesCount, Data.Vertices, Data.Normals);
-
-	for (unsigned int i = 0; i < UvIndicesCount; i++)
-	{
-		unsigned int UvIndex = UvIndices[i];
-		if (Settings & WAVE_FLIP_UVS)
+		if (NormalIndicesCount != 0)
 		{
-			Data.TexCoords[i].x = TempUVs[UvIndex - 1].x;
-			Data.TexCoords[i].y = -TempUVs[UvIndex - 1].y;
+			unsigned int NormalIndex = NormalIndices[i];
+			Data.Normals[i] = TempNormals[NormalIndex - 1];
+		}
+		if (UvIndicesCount != 0)
+		{
+			unsigned int UvIndex = UvIndices[i];
+			if (Settings & WAVE_FLIP_UVS)
+			{
+				Data.TexCoords[i].x = TempUVs[UvIndex - 1].x;
+				Data.TexCoords[i].y = -TempUVs[UvIndex - 1].y;
+			}
+			else
+				Data.TexCoords[i] = TempUVs[UvIndex - 1];
+		}
+
+		if (WaveHasMaterial && (Settings & WAVE_LOAD_MATERIAL))
+		{
+			if (TempMaterial[Pos].Pos == i)
+				Pos++;
+
+			Data.Material[i] = Material[Pos - 1];
 		}
 		else
-			Data.TexCoords[i] = TempUVs[UvIndex - 1];
+			Data.Material[i] = EmptyMaterial;
 	}
+
 
 	free(Material);
 	free(TempMaterial);
@@ -476,6 +494,87 @@ WaveModelData LoadOBJ(const char* Path, enum WaveSettings Settings)
 	free(VertexIndices);
 	free(UvIndices);
 	free(NormalIndices);
+
+	return Data;
+}
+
+typedef struct
+{
+	unsigned char Header[80];
+	unsigned int Triangles;
+} WaveSTLDescription;
+
+typedef struct WaveSTLDescription
+{
+	WaveVec3 Normal;
+	WaveVec3 Vertex1;
+	WaveVec3 Vertex2;
+	WaveVec3 Vertex3;
+	short int ByteCount;
+} WaveSTLVertex;
+
+WaveModelData WaveLoadSTL(const char* Path, enum WaveSettings Settings)
+{
+	FILE* File = fopen(Path, "rb");
+	if (!File)
+		return;
+
+	WaveSTLVertex* VertexArray;
+	WaveSTLDescription Description;
+
+	fread(&Description, sizeof(Description), 1, File);
+	VertexArray = malloc(Description.Triangles * sizeof(WaveSTLVertex));
+
+	unsigned int VerticeCount = Description.Triangles * 3;
+
+	WaveModelMaterial EmptyMaterial =
+	{
+		"Default",
+		{ 1.0, 1.0, 1.0 },
+		{ 1.0, 1.0, 1.0 },
+		1.0,
+		{ 1.0, 1.0, 1.0 },
+		"NoTexture",
+		"NoTexture",
+		"NoTexture",
+		"NoTexture",
+		"NoTexture",
+		"NoTexture"
+	};
+
+	WaveModelData Data;
+	Data.Material = malloc(VerticeCount * sizeof(WaveModelMaterial));
+	Data.VerticeCount = VerticeCount;
+	Data.TexCoordCount = VerticeCount;
+	Data.NormalCount = VerticeCount;
+
+	Data.Vertices = malloc(VerticeCount * sizeof(WaveVec3));
+	Data.TexCoords = malloc(VerticeCount * sizeof(WaveVec3));
+	Data.Normals = malloc(VerticeCount * sizeof(WaveVec3));
+
+	unsigned int j = 0;
+	for (unsigned int i = 0; i < Description.Triangles; i++)
+	{
+		fread(&VertexArray[i], 50, 1, File);
+
+
+		Data.Vertices[j] = VertexArray[i].Vertex1;
+		Data.Vertices[j + 1] = VertexArray[i].Vertex2;
+		Data.Vertices[j + 2] = VertexArray[i].Vertex3;
+
+		Data.Normals[j] = VertexArray[i].Normal;
+		Data.Normals[j + 1] = VertexArray[i].Normal;
+		Data.Normals[j + 2] = VertexArray[i].Normal;
+
+		Data.Material[j] = EmptyMaterial;
+		Data.Material[j + 1] = EmptyMaterial;
+		Data.Material[j + 2] = EmptyMaterial;
+
+		j += 3;
+	}
+
+	if (Settings & WAVE_GEN_UVS)
+		Data.TexCoords = WaveGenUVs(VerticeCount, Data.Vertices, Data.Normals);
 
 	return Data;
 }

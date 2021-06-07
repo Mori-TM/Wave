@@ -20,7 +20,8 @@ vec3 Res = Add3(A, B);
 ```
 WaveLoader is a basic C OBJ Loader it can Load Triangulated Models with their Material.
 ```C
-WaveModelData ModelData = LoadOBJ("Vulkan.obj", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
+WaveModelData ModelData = WaveLoadOBJ("Vulkan.obj", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
+              ModelData = WaveLoadSTL("Vulkan.stl", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
 
 for (int i = 0; i < ModelData.VerticeCount; i++)
 {

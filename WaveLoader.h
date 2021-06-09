@@ -63,6 +63,46 @@ float WaveDot(WaveVec3 a, WaveVec3 b)
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+WaveVec3 WaveAdd(WaveVec3 a, WaveVec3 b)
+{
+	WaveVec3 r;
+	r.x = a.x + b.x;
+	r.y = a.y + b.y;
+	r.z = a.z + b.z;
+
+	return r;
+}
+
+WaveVec3 WaveSub(WaveVec3 a, WaveVec3 b)
+{
+	WaveVec3 r;
+	r.x = a.x - b.x;
+	r.y = a.y - b.y;
+	r.z = a.z - b.z;
+
+	return r;
+}
+
+WaveVec3 WaveMul(WaveVec3 a, WaveVec3 b)
+{
+	WaveVec3 r;
+	r.x = a.x * b.x;
+	r.y = a.y * b.y;
+	r.z = a.z * b.z;
+
+	return r;
+}
+
+WaveVec3 WaveDiv(WaveVec3 a, WaveVec3 b)
+{
+	WaveVec3 r;
+	r.x = a.x / b.x;
+	r.y = a.y / b.y;
+	r.z = a.z / b.z;
+
+	return r;
+}
+
 typedef struct
 {
 	char MaterialName[2048];
@@ -205,19 +245,15 @@ WaveVec3* WaveGenNormals(unsigned int VerticesCount, WaveVec3* Vertices)
 
 	for (unsigned int i = 0; i < VerticesCount; i += 3)
 	{
-		WaveVec3 U;
-		U.x = Vertices[i + 1].x - Vertices[i + 0].x;
-		U.y = Vertices[i + 1].y - Vertices[i + 0].y;
-		U.z = Vertices[i + 1].z - Vertices[i + 0].z;
+		WaveVec3 N = WaveCross(WaveSub(Vertices[i + 1], Vertices[i]), WaveSub(Vertices[i + 2], Vertices[i]));
 
-		WaveVec3 V;
-		V.x = Vertices[i + 2].x - Vertices[i + 0].x;
-		V.y = Vertices[i + 2].y - Vertices[i + 0].y;
-		V.z = Vertices[i + 2].z - Vertices[i + 0].z;
-		
-		Normals[i+0] = WaveNormalize(WaveCross(U, V));
-		Normals[i+1] = WaveNormalize(WaveCross(U, V));
-		Normals[i+2] = WaveNormalize(WaveCross(U, V));
+		Normals[i] = WaveAdd(Normals[i], N);
+		Normals[i + 1] = WaveAdd(Normals[i + 1], N);
+		Normals[i + 2] = WaveAdd(Normals[i + 2], N);
+
+		Normals[i] = WaveNormalize(Normals[i]);
+		Normals[i + 1] = WaveNormalize(Normals[i + 1]);
+		Normals[i + 2] = WaveNormalize(Normals[i + 2]);
 	}
 
 	return Normals;
@@ -444,12 +480,6 @@ WaveModelData WaveLoadOBJ(const char* Path, enum WaveSettings Settings)
 
 	int Pos = 0;
 
-	if ((Settings & WAVE_GEN_NORMALS) && NormalIndicesCount == 0)
-		Data.Normals = WaveGenNormals(VertexIndicesCount, Data.Vertices);
-
-	if ((Settings & WAVE_GEN_UVS) && UvIndicesCount == 0)
-		Data.TexCoords = WaveGenUVs(VertexIndicesCount, Data.Vertices, Data.Normals);
-
 	for (unsigned int i = 0; i < VertexIndicesCount; i++)
 	{
 		unsigned int VertexIndex = VertexIndices[i];
@@ -483,6 +513,11 @@ WaveModelData WaveLoadOBJ(const char* Path, enum WaveSettings Settings)
 			Data.Material[i] = EmptyMaterial;
 	}
 
+	if ((Settings & WAVE_GEN_NORMALS) && NormalIndicesCount == 0)
+		Data.Normals = WaveGenNormals(VertexIndicesCount, Data.Vertices);
+
+	if ((Settings & WAVE_GEN_UVS) && UvIndicesCount == 0)
+		Data.TexCoords = WaveGenUVs(VertexIndicesCount, Data.Vertices, Data.Normals);
 
 	free(Material);
 	free(TempMaterial);
@@ -557,7 +592,6 @@ WaveModelData WaveLoadSTL(const char* Path, enum WaveSettings Settings)
 	{
 		fread(&VertexArray[i], 50, 1, File);
 
-
 		Data.Vertices[j] = VertexArray[i].Vertex1;
 		Data.Vertices[j + 1] = VertexArray[i].Vertex2;
 		Data.Vertices[j + 2] = VertexArray[i].Vertex3;
@@ -575,6 +609,397 @@ WaveModelData WaveLoadSTL(const char* Path, enum WaveSettings Settings)
 
 	if (Settings & WAVE_GEN_UVS)
 		Data.TexCoords = WaveGenUVs(VerticeCount, Data.Vertices, Data.Normals);
+
+	fclose(File);
+	free(VertexArray);
+
+	return Data;
+}
+
+typedef struct
+{
+	char* Line;
+	unsigned int Length;
+
+	unsigned int LineCount;
+} WaveLine;
+
+WaveLine* WaveGetLines(char* Buffer, long BufferLength)
+{
+	WaveLine* FinalLines = malloc(1 * sizeof(WaveLine));
+	
+	unsigned int LineCount = 0;
+
+	char* p = strtok(Buffer, "\n");
+	while (p)
+	{
+		FinalLines[LineCount].Line = p;
+		FinalLines[LineCount].Length = strlen(p);
+
+		LineCount++;
+		FinalLines = realloc(FinalLines, (LineCount + 1) * sizeof(WaveLine));
+
+		p = strtok(NULL, "\n");
+	}
+
+	FinalLines->LineCount = LineCount;
+
+	free(p);
+
+	return FinalLines;
+}
+
+typedef struct
+{
+	float* FloatArray;
+	unsigned int FloatArrayCount;
+
+	unsigned int ArrayCount;
+} WaveFloatArray;
+
+typedef struct
+{
+	char* CharArray;
+	unsigned int CharArrayCount;
+
+	unsigned int ArrayCount;
+} WaveCharArray;
+
+WaveFloatArray GetFloatsFromString(char* Line, long Length)
+{
+	WaveFloatArray FinalArray;
+
+	float* FloatArray = malloc(1 * sizeof(float));
+	unsigned int FloatArrayCount = 0;
+
+	char* p = strtok(Line, " ");
+	while (p)
+	{
+		FloatArray[FloatArrayCount] = atof(p);
+		FloatArrayCount++;
+		FloatArray = realloc(FloatArray, (FloatArrayCount + 1) * sizeof(float));
+
+		p = strtok(NULL, " ");
+	}
+
+	FinalArray.FloatArray = FloatArray;
+	FinalArray.FloatArrayCount = FloatArrayCount;
+	free(p);
+	return FinalArray;
+}
+
+WaveFloatArray WaveGetFloatsFromLine(char* Line, long Length)
+{
+	char* FloatLine = malloc(1 * sizeof(char));
+	unsigned int FloatLineCount = 0;
+
+	WaveFloatArray FloatArray;
+
+	for (unsigned int i = 0; i < Length; i++)
+	{
+		if (Line[i] == '>')
+		{
+			FloatLine = malloc(1 * sizeof(char));
+			FloatLineCount = 0;
+
+			while (1)
+			{
+				i++;
+
+				if (Line[i] == '<')
+				{
+					FloatLine[FloatLineCount] = '\0';
+					FloatArray = GetFloatsFromString(FloatLine, FloatLineCount);
+					break;
+				}
+
+				FloatLine[FloatLineCount] = Line[i];
+				FloatLineCount++;
+				FloatLine = realloc(FloatLine, (FloatLineCount + 1) * sizeof(char));
+			}
+
+			free(FloatLine);
+			return FloatArray;
+		}
+	}
+}
+
+typedef struct
+{
+	WaveFloatArray* FloatArray;
+	unsigned int VertexPos;
+	unsigned int NormalPos;
+	unsigned int TexCoordPos;
+	unsigned int ColorPos;
+	unsigned int IndexPos;
+} WaveMeshData;
+
+WaveMeshData WaveGetMeshData(WaveLine* Lines)
+{
+	WaveMeshData MeshData;
+
+	WaveFloatArray* FloatArray = malloc(1 * sizeof(WaveFloatArray));
+	unsigned int FloatArrayCount = 0;
+
+	WaveCharArray* VertexOrder = malloc(1 * sizeof(WaveCharArray));
+	unsigned int VertexCount = 0;
+
+	for (unsigned int i = 0; i < Lines->LineCount; i++)
+	{
+		char* FoundMeshNode = strstr(Lines[i].Line, "<mesh>");
+		if (FoundMeshNode)
+		{
+			while (1)
+			{
+				char* FoundMeshNodeEnd = strstr(Lines[i].Line, "</mesh>");
+				if (FoundMeshNodeEnd)
+					break;
+
+				char* FoundVertex = strstr(Lines[i].Line, "float_array");
+
+				if (FoundVertex)
+				{
+					FloatArray[FloatArrayCount] = WaveGetFloatsFromLine(Lines[i].Line, Lines[i].Length);
+					FloatArrayCount++;
+					FloatArray = realloc(FloatArray, (FloatArrayCount + 1) * sizeof(WaveFloatArray));
+				}
+
+				char* FoundIndex = strstr(Lines[i].Line, "<p>");
+			
+				if (FoundIndex)
+				{
+					FloatArray[FloatArrayCount] = WaveGetFloatsFromLine(Lines[i].Line, Lines[i].Length);
+					FloatArrayCount++;
+					FloatArray = realloc(FloatArray, (FloatArrayCount + 1) * sizeof(WaveFloatArray));
+				}
+
+				char* FoundOffset = strstr(Lines[i].Line, "offset");
+
+				if (FoundOffset)
+				{
+					VertexOrder[VertexCount].CharArray = Lines[i].Line;
+					VertexOrder[VertexCount].CharArrayCount = strlen(Lines[i].Line);
+					VertexCount++;
+					VertexOrder = realloc(VertexOrder, (VertexCount + 1) * sizeof(WaveCharArray));
+				}
+
+				i++;
+			}
+		}
+	}
+
+	VertexOrder->ArrayCount = VertexCount;
+	FloatArray->ArrayCount = FloatArrayCount;
+
+	MeshData.FloatArray = FloatArray;
+
+	MeshData.VertexPos = 256;
+	MeshData.NormalPos = 256;
+	MeshData.TexCoordPos = 256;
+	MeshData.ColorPos = 256;
+
+	for (unsigned int i = 0; i < VertexOrder->ArrayCount; i++)
+	{
+		char* FoundVertex = strstr(VertexOrder[i].CharArray, "VERTEX");
+
+		if (FoundVertex)
+			MeshData.VertexPos = i;
+
+		char* FoundNormal = strstr(VertexOrder[i].CharArray, "NORMAL");
+
+		if (FoundNormal)
+			MeshData.NormalPos = i;
+
+		char* FoundTexCoord = strstr(VertexOrder[i].CharArray, "TEXCOORD");
+
+		if (FoundTexCoord)
+			MeshData.TexCoordPos = i;
+
+		char* FoundColor = strstr(VertexOrder[i].CharArray, "COLOR");
+
+		if (FoundColor)
+			MeshData.ColorPos = i;
+	}
+
+	return MeshData;
+}
+
+WaveModelData WaveLoadDAE(const char* Path, enum WaveSettings Settings)
+{
+	char* Buffer = 0;
+	long Length = 0;
+
+	FILE* File = fopen(Path, "r");
+	if (!File)
+		return;
+
+	fseek(File, 0, SEEK_END);
+	Length = ftell(File);
+	fseek(File, 0, SEEK_SET);
+	Buffer = (char*)malloc(Length + 1);
+	fread(Buffer, sizeof(char), Length, File);
+
+	WaveLine* Lines = WaveGetLines(Buffer, Length);
+	WaveMeshData MeshData = WaveGetMeshData(Lines);
+
+	WaveVec3* FinalVertices = malloc(1 * sizeof(WaveVec3));
+	WaveVec3* FinalNormlas = malloc(1 * sizeof(WaveVec3));
+	WaveVec3* FinalTexCoords = malloc(1 * sizeof(WaveVec3));
+	WaveVec3* FinalColors = malloc(1 * sizeof(WaveVec3));
+
+	unsigned int VerticesCount = 0;
+	unsigned int NormalCount = 0;
+	unsigned int TexCoordCount = 0;
+	unsigned int ColorCount = 0;
+	//Indices
+	unsigned int* FinalVerticeIndices = malloc(1 * sizeof(unsigned int));
+	unsigned int* FinalNormlaIndices = malloc(1 * sizeof(unsigned int));
+	unsigned int* FinalTexCoordIndices = malloc(1 * sizeof(unsigned int));
+	unsigned int* FinalColorIndices = malloc(1 * sizeof(unsigned int));
+
+	unsigned int VerticesIndicesCount = 0;
+	unsigned int NormalIndicesCount = 0;
+	unsigned int TexCoordIndicesCount = 0;
+	unsigned int ColorIndicesCount = 0;
+
+	for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.VertexPos].FloatArrayCount; i += 3)
+	{
+		FinalVertices[VerticesCount].x = MeshData.FloatArray[MeshData.VertexPos].FloatArray[i];
+		FinalVertices[VerticesCount].y = MeshData.FloatArray[MeshData.VertexPos].FloatArray[i + 1];
+		FinalVertices[VerticesCount].z = MeshData.FloatArray[MeshData.VertexPos].FloatArray[i + 2];
+		VerticesCount++;
+		FinalVertices = realloc(FinalVertices, (VerticesCount + 1) * sizeof(WaveVec3));
+	}
+
+	if (MeshData.NormalPos != 256)
+		for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.NormalPos].FloatArrayCount; i += 3)
+		{
+			FinalNormlas[NormalCount].x = MeshData.FloatArray[MeshData.NormalPos].FloatArray[i];
+			FinalNormlas[NormalCount].y = MeshData.FloatArray[MeshData.NormalPos].FloatArray[i + 1];
+			FinalNormlas[NormalCount].z = MeshData.FloatArray[MeshData.NormalPos].FloatArray[i + 2];
+			NormalCount++;
+			FinalNormlas = realloc(FinalNormlas, (NormalCount + 1) * sizeof(WaveVec3));
+		}
+
+	if (MeshData.TexCoordPos != 256)
+		for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.TexCoordPos].FloatArrayCount; i += 2)
+		{
+			FinalTexCoords[TexCoordCount].x = MeshData.FloatArray[MeshData.TexCoordPos].FloatArray[i];
+			FinalTexCoords[TexCoordCount].y = MeshData.FloatArray[MeshData.TexCoordPos].FloatArray[i + 1];
+			FinalTexCoords[TexCoordCount].z = 0.0;
+			TexCoordCount++;
+			FinalTexCoords = realloc(FinalTexCoords, (TexCoordCount + 1) * sizeof(WaveVec3));
+		}
+
+	if (MeshData.ColorPos != 256)
+		for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.ColorPos].FloatArrayCount; i += 3)
+		{
+			FinalColors[ColorCount].x = MeshData.FloatArray[MeshData.ColorPos].FloatArray[i];
+			FinalColors[ColorCount].y = MeshData.FloatArray[MeshData.ColorPos].FloatArray[i + 1];
+			FinalColors[ColorCount].z = MeshData.FloatArray[MeshData.ColorPos].FloatArray[i + 2];
+			ColorCount++;
+			FinalColors = realloc(FinalColors, (ColorCount + 1) * sizeof(WaveVec3));
+		}
+
+	for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.FloatArray->ArrayCount-1].FloatArrayCount; i += MeshData.FloatArray->ArrayCount-1)
+	{
+		FinalVerticeIndices[VerticesIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.VertexPos];
+		VerticesIndicesCount++;
+		FinalVerticeIndices = realloc(FinalVerticeIndices, (VerticesIndicesCount + 1) * sizeof(unsigned int));
+
+		if (NormalCount != 0)
+		{
+			FinalNormlaIndices[NormalIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.NormalPos];
+			NormalIndicesCount++;
+			FinalNormlaIndices = realloc(FinalNormlaIndices, (NormalIndicesCount + 1) * sizeof(unsigned int));
+		}
+			
+		if (TexCoordCount != 0)
+		{
+			FinalTexCoordIndices[TexCoordIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.TexCoordPos];
+			TexCoordIndicesCount++;
+			FinalTexCoordIndices = realloc(FinalTexCoordIndices, (TexCoordIndicesCount + 1) * sizeof(unsigned int));
+		}
+			
+		if (ColorCount != 0)
+		{
+			FinalColorIndices[ColorIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.ColorPos];
+			ColorIndicesCount++;
+			FinalColorIndices = realloc(FinalColorIndices, (ColorIndicesCount + 1) * sizeof(unsigned int));
+		}
+	}
+
+	WaveModelMaterial EmptyMaterial =
+	{
+		"Default",
+		{ 1.0, 1.0, 1.0 },
+		{ 1.0, 1.0, 1.0 },
+		1.0,
+		{ 1.0, 1.0, 1.0 },
+		"NoTexture",
+		"NoTexture",
+		"NoTexture",
+		"NoTexture",
+		"NoTexture",
+		"NoTexture"
+	};
+
+	WaveModelData Data;
+	Data.Material = malloc(VerticesIndicesCount * sizeof(WaveModelMaterial));
+	Data.VerticeCount = VerticesIndicesCount;
+	Data.TexCoordCount = VerticesIndicesCount;
+	Data.NormalCount = VerticesIndicesCount;
+
+	Data.Vertices = malloc(VerticesIndicesCount * sizeof(WaveVec3));
+	Data.TexCoords = malloc(VerticesIndicesCount * sizeof(WaveVec3));
+	Data.Normals = malloc(VerticesIndicesCount * sizeof(WaveVec3));
+
+	for (unsigned int i = 0; i < VerticesIndicesCount; i++)
+	{
+		Data.Vertices[i] = FinalVertices[FinalVerticeIndices[i]];
+		
+		if (NormalIndicesCount != 0)
+			Data.Normals[i] = FinalNormlas[FinalNormlaIndices[i]];
+			
+		if (TexCoordIndicesCount != 0)
+		{
+			if (Settings & WAVE_FLIP_UVS)
+			{
+				Data.TexCoords[i].x = FinalTexCoords[FinalTexCoordIndices[i]].x;
+				Data.TexCoords[i].y = -FinalTexCoords[FinalTexCoordIndices[i]].y;
+			}
+			else
+				Data.TexCoords[i] = FinalTexCoords[FinalTexCoordIndices[i]];
+		}
+			
+
+		if (ColorIndicesCount != 0)
+		{
+			Data.Material[i] = EmptyMaterial;
+			Data.Material[i].DiffuseColor = FinalColors[FinalColorIndices[i]];
+		}
+		else
+			Data.Material[i] = EmptyMaterial;
+	}
+//	Data.Normals = WaveGenSmoothNormals(VerticesIndicesCount, Data.Vertices);
+	if ((Settings & WAVE_GEN_NORMALS) && NormalIndicesCount == 0)
+		Data.Normals = WaveGenNormals(VerticesIndicesCount, Data.Vertices);
+
+	if ((Settings & WAVE_GEN_UVS) && TexCoordIndicesCount == 0)
+		Data.TexCoords = WaveGenUVs(VerticesIndicesCount, Data.Vertices, Data.Normals);
+
+	free(Buffer);
+	free(Lines);
+	free(FinalVertices);
+	free(FinalNormlas);
+	free(FinalTexCoords);
+	free(FinalColors);
+
+	free(FinalVerticeIndices);
+	free(FinalNormlaIndices);
+	free(FinalTexCoordIndices);
+	free(FinalColorIndices);
+	fclose(File);
 
 	return Data;
 }

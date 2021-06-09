@@ -259,7 +259,7 @@ WaveVec3* WaveGenNormals(unsigned int VerticesCount, WaveVec3* Vertices)
 	return Normals;
 }
 
-WaveModelData WaveLoadOBJ(const char* Path, enum WaveSettings Settings)
+WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 {
 	FILE* File = fopen(Path, "r");
 	if (!File)
@@ -548,7 +548,7 @@ typedef struct WaveSTLDescription
 	short int ByteCount;
 } WaveSTLVertex;
 
-WaveModelData WaveLoadSTL(const char* Path, enum WaveSettings Settings)
+WaveModelData WaveLoadSTL(const char* Path, WaveSettings Settings)
 {
 	FILE* File = fopen(Path, "rb");
 	if (!File)
@@ -824,7 +824,7 @@ WaveMeshData WaveGetMeshData(WaveLine* Lines)
 	return MeshData;
 }
 
-WaveModelData WaveLoadDAE(const char* Path, enum WaveSettings Settings)
+WaveModelData WaveLoadDAE(const char* Path, WaveSettings Settings)
 {
 	char* Buffer = 0;
 	long Length = 0;

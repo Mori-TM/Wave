@@ -22,6 +22,8 @@ WaveLoader is a basic C OBJ Loader it can Load Triangulated Models with their Ma
 ```C
 WaveModelData ModelData = WaveLoadOBJ("Vulkan.obj", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
               ModelData = WaveLoadSTL("Vulkan.stl", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
+              //Very Experimental and no Material Loading just colors
+              ModelData = WaveLoadDAE("Vulkan.dae", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
 
 for (int i = 0; i < ModelData.VerticeCount; i++)
 {

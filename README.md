@@ -24,19 +24,20 @@ WaveModelData ModelData = WaveLoadOBJ("Vulkan.obj", WAVE_FLIP_UVS | WAVE_GEN_UVS
               ModelData = WaveLoadSTL("Vulkan.stl", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
               //Very Experimental and no Material Loading just colors
               ModelData = WaveLoadDAE("Vulkan.dae", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
-
-for (int i = 0; i < ModelData.VerticeCount; i++)
+              //Or use
+              ModelData = WaveLoadModel("Vulkan.(dae/obj/stl)", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
+for (int i = 0; i < ModelData->Mesh->VerticeCount; i++)
 {
-  Vertices.Pos.x = ModelData.Vertices[i].x;
-  Vertices.Pos.y = ModelData.Vertices[i].y;
-  Vertices.Pos.z = ModelData.Vertices[i].z;
+  Vertices.Pos.x = ModelData.Mesh[i].Vertices.x;
+  Vertices.Pos.y = ModelData.Mesh[i].Vertices.y;
+  Vertices.Pos.z = ModelData.Mesh[i].Vertices.z;
 
-  Vertices.TexCoord.x = ModelData.TexCoords[i].x;
-  Vertices.TexCoord.y = ModelData.TexCoords[i].y;
+  Vertices.TexCoord.x = ModelData.Mesh[i].TexCoords.x;
+  Vertices.TexCoord.y = ModelData.Mesh[i].TexCoords.y;
 
-  Vertices.Normal.x = ModelData.Normals[i].x;
-  Vertices.Normal.y = ModelData.Normals[i].y;
-  Vertices.Normal.z = ModelData.Normals[i].z;
+  Vertices.Normal.x = ModelData.Mesh[i].Normals.x;
+  Vertices.Normal.y = ModelData.Mesh[i].Normals.y;
+  Vertices.Normal.z = ModelData.Mesh[i].Normals.z;
 
   Vertices.Color.x = ModelData.Material[i].DiffuseColor.x;
   Vertices.Color.y = ModelData.Material[i].DiffuseColor.y;

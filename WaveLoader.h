@@ -106,6 +106,8 @@ WaveVec3 WaveDiv(WaveVec3 a, WaveVec3 b)
 
 typedef struct
 {
+	unsigned int VertexIndex;
+
 	char MaterialName[2048];
 
 	WaveVec3 AmbientColor;
@@ -126,10 +128,12 @@ typedef struct
 	WaveVec3 Vertices;
 	WaveVec3 TexCoords;
 	WaveVec3 Normals;
+	WaveVec3 VertexColor;
 } WaveMeshData;
 
 typedef struct
 {
+	int HasMaterial;
 	WaveModelMaterial* Material;
 
 	WaveMeshData* Mesh;
@@ -139,102 +143,103 @@ typedef struct
 {
 	char Name[2048];
 	unsigned int Pos;
-} TempMaterialDescription;
+} WaveObjMaterialDescription;
 
-void WaveGenUVs(WaveModelData* Data)
+void WaveGenUVs(WaveModelData* Data, unsigned int i)
 {
 	float MinX = 1000000000.0;
 	float MaxX = -1000000000.0;
 
 	float MinY = 1000000000.0;
 	float MaxY = -1000000000.0;
-	for (unsigned int i = 0; i < Data->Mesh->VerticeCount; i++)
-	{
-	//		float TempUVsqrt = sqrtf(Vertices[i].x * Vertices[i].x + Vertices[i].y * Vertices[i].y + Vertices[i].z * Vertices[i].z);
-	//		TexCoord[i].x = sin(cos(Vertices[i].x / TempUVsqrt));
-	//		TexCoord[i].y = sin(sin(Vertices[i].y / TempUVsqrt));
 
-	
-	//	MinX = WAVEMIN(MinX, Vertices[i].x);
-	//	MinY = WAVEMIN(MinY, Vertices[i].y);
+	//		float TempUVsqrt = sqrtf(Data->Mesh[i].Vertices.x * Data->Mesh[i].Vertices.x + Data->Mesh[i].Vertices.y * Data->Mesh[i].Vertices.y + Data->Mesh[i].Vertices.z * Data->Mesh[i].Vertices.z);
+	//		Data->Mesh[i].TexCoords.x = sinf(cosf(Data->Mesh[i].Vertices.x / TempUVsqrt));
+	//		Data->Mesh[i].TexCoords.y = sinf(sinf(Data->Mesh[i].Vertices.y / TempUVsqrt));
+
+	float TempUVsqrt = sqrtf(Data->Mesh[i].Vertices.x * Data->Mesh[i].Vertices.x + Data->Mesh[i].Vertices.y * Data->Mesh[i].Vertices.y + Data->Mesh[i].Vertices.z * Data->Mesh[i].Vertices.z);
+	Data->Mesh[i].TexCoords.x = sinf(cosf(Data->Mesh[i].Vertices.x / TempUVsqrt));
+	Data->Mesh[i].TexCoords.y = sinf(sinf(Data->Mesh[i].Vertices.y / TempUVsqrt));
+
+	//	MinX = WAVEMIN(MinX, Data->Mesh[i].Vertices.x);
+	//	MinY = WAVEMIN(MinY, Data->Mesh[i].Vertices.y);
 	//
-	//	MaxX = WAVEMAX(MaxX, Vertices[i].x);
-	//	MaxY = WAVEMAX(MaxY, Vertices[i].y);
+	//	MaxX = WAVEMAX(MaxX, Data->Mesh[i].Vertices.x);
+	//	MaxY = WAVEMAX(MaxY, Data->Mesh[i].Vertices.y);
 	//
 	//	float KX = 1 / (MaxX - MinX);
 	//	float KY = 1 / (MaxY - MinY);
 	//
-	//	TexCoord[i].x = (Vertices[i].x - MinX) * KX;
-	//	TexCoord[i].y = (Vertices[i].y - MinY) * KY;
-	
-		
-		float DotProduct = 2 * WaveDot(Data->Mesh[i].Normals, Data->Mesh[i].Vertices);
-		float X = Data->Mesh[i].Vertices.x - Data->Mesh[i].Normals.x * DotProduct;
-		float Y = Data->Mesh[i].Vertices.y - Data->Mesh[i].Normals.y * DotProduct;
-		float Z = Data->Mesh[i].Vertices.z - Data->Mesh[i].Normals.z * DotProduct;
-		WaveVec3 R = { X, Y, Z };
+	//	Data->Mesh[i].TexCoords.x = (Data->Mesh[i].Vertices.x - MinX) * KX;
+	//	Data->Mesh[i].TexCoords.y = (Data->Mesh[i].Vertices.y - MinY) * KY;
 
-		if ((R.x >= R.y) && (R.x >= R.z))
-		{
-			float UC = -R.z;
-			float VC = -R.y;
-			float M = fabsf(R.x);
+	/*
+	float DotProduct = 2 * WaveDot(Data->Mesh[i].Normals, Data->Mesh[i].Vertices);
+	float X = Data->Mesh[i].Normals.x * DotProduct - Data->Mesh[i].Vertices.x;
+	float Y = Data->Mesh[i].Normals.y * DotProduct - Data->Mesh[i].Vertices.y;
+	float Z = Data->Mesh[i].Normals.z * DotProduct - Data->Mesh[i].Vertices.z;
+	WaveVec3 R = { X, Y, Z };
 
-			Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
-			Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
-		}
+	if ((R.x >= R.y) && (R.x >= R.z))
+	{
+		float UC = -R.z;
+		float VC = -R.y;
+		float M = fabsf(R.x);
 
-		if ((R.x <= R.y) && (R.x <= R.z))
-		{
-			float UC = +R.z;
-			float VC = -R.y;
-			float M = fabsf(R.x);
-
-			Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
-			Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
-		}
-
-		if ((R.y >= R.z) && (R.y >= R.x))
-		{
-			float UC = +R.x;
-			float VC = +R.z;
-			float M = fabsf(R.y);
-
-			Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
-			Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
-		}
-
-		if ((R.y <= R.z) && (R.z <= R.x))
-		{
-			float UC = +R.x;
-			float VC = -R.z;
-			float M = fabsf(R.y);
-
-			Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
-			Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
-		}
-
-		if ((R.z >= R.y) && (R.z >= R.x))
-		{
-			float UC = +R.x;
-			float VC = -R.y;
-			float M = fabsf(R.z);
-
-			Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
-			Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
-		}
-
-		if ((R.z <= R.y) && (R.z <= R.x))
-		{
-			float UC = -R.x;
-			float VC = -R.y;
-			float M = fabsf(R.z);
-
-			Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
-			Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
-		}
-		
+		Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
+		Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
 	}
+
+	if ((R.x <= R.y) && (R.x <= R.z))
+	{
+		float UC = +R.z;
+		float VC = -R.y;
+		float M = fabsf(R.x);
+
+		Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
+		Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
+	}
+
+	if ((R.y >= R.z) && (R.y >= R.x))
+	{
+		float UC = +R.x;
+		float VC = +R.z;
+		float M = fabsf(R.y);
+
+		Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
+		Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
+	}
+
+	if ((R.y <= R.z) && (R.y <= R.x))
+	{
+		float UC = +R.x;
+		float VC = -R.z;
+		float M = fabsf(R.y);
+
+		Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
+		Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
+	}
+
+	if ((R.z >= R.y) && (R.z >= R.x))
+	{
+		float UC = +R.x;
+		float VC = -R.y;
+		float M = fabsf(R.z);
+
+		Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
+		Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
+	}
+
+	if ((R.z <= R.y) && (R.z <= R.x))
+	{
+		float UC = -R.x;
+		float VC = -R.y;
+		float M = fabsf(R.z);
+
+		Data->Mesh[i].TexCoords.x = ((UC / M) + 1) / 2;
+		Data->Mesh[i].TexCoords.y = ((VC / M) + 1) / 2;
+	}
+	*/
 }
 
 void WaveGenNormals(WaveModelData* Data)
@@ -243,11 +248,11 @@ void WaveGenNormals(WaveModelData* Data)
 	{
 		WaveVec3 N = WaveCross(WaveSub(Data->Mesh[i + 1].Vertices, Data->Mesh[i].Vertices), WaveSub(Data->Mesh[i + 2].Vertices, Data->Mesh[i].Vertices));
 
-		Data->Mesh[i + 0].Normals = N;
+		Data->Mesh[i].Normals = N;
 		Data->Mesh[i + 1].Normals = N;
 		Data->Mesh[i + 2].Normals = N;
 
-		Data->Mesh[i + 0].Normals = WaveNormalize(Data->Mesh[i + 0].Normals);
+		Data->Mesh[i].Normals = WaveNormalize(Data->Mesh[i].Normals);
 		Data->Mesh[i + 1].Normals = WaveNormalize(Data->Mesh[i + 1].Normals);
 		Data->Mesh[i + 2].Normals = WaveNormalize(Data->Mesh[i + 2].Normals);
 	}
@@ -264,57 +269,16 @@ float WaveAngle(WaveVec3 a, WaveVec3 b)
 	return Angle;
 }
 
-WaveVec3* WaveGenSmoothNormals(unsigned int VerticesCount, WaveVec3* Vertices)
+void WaveGenSmoothNormals(WaveModelData* Data, float* Indices, unsigned int IndicesCount, float* Vertices, unsigned int VerticesCount)
 {
-	WaveVec3* Normals = malloc(VerticesCount * sizeof(WaveVec3));
-	WaveVec3* FinalNormals = malloc(VerticesCount * sizeof(WaveVec3));
-
 	for (unsigned int i = 0; i < VerticesCount; i += 3)
 	{
-		WaveVec3 N = WaveCross(WaveSub(Vertices[i + 1], Vertices[i]), WaveSub(Vertices[i + 2], Vertices[i]));
-
-		float A1 = WaveAngle(WaveSub(Vertices[i + 1], Vertices[i + 0]), WaveSub(Vertices[i + 2], Vertices[i + 0]));
-		float A2 = WaveAngle(WaveSub(Vertices[i + 2], Vertices[i + 1]), WaveSub(Vertices[i + 0], Vertices[i + 1]));
-		float A3 = WaveAngle(WaveSub(Vertices[i + 0], Vertices[i + 2]), WaveSub(Vertices[i + 1], Vertices[i + 2]));
-
-		N = WaveNormalize(N);
-
-		WaveVec3 A1V = { A1, A1, A1 };
-		WaveVec3 A2V = { A2, A2, A2 };
-		WaveVec3 A3V = { A3, A3, A3 };
-
-		Normals[i] = WaveMul(N, A1V);
-		Normals[i + 1] = WaveMul(N, A2V);
-		Normals[i + 2] = WaveMul(N, A3V);
-		/*
-		Normals[i] = WaveAdd(N, Normals[i]);
-		Normals[i] = WaveNormalize(Normals[i]);
-
-		Normals[i + 1] = WaveAdd(N, Normals[i + 1]);
-		Normals[i + 1] = WaveNormalize(Normals[i + 1]);
-
-		Normals[i + 2] = WaveAdd(N, Normals[i + 2]);
-		Normals[i + 2] = WaveNormalize(Normals[i + 2]);
-		*/
-	}
-
-	for (unsigned int i = 0; i < 3; i++)
-	{
-		WaveVec3 N = { 0.0, 0.0, 0.0 };
-
-		for (unsigned int j = 0; j < VerticesCount; j++)
+		if (Vertices[i] == Vertices[i + 1])
 		{
-			N = WaveAdd(N, Normals[i]);
+
 		}
-		N = WaveAdd(N, Normals[i]);
-		N = WaveAdd(N, Normals[i+1]);
-		N = WaveAdd(N, Normals[i+2]);
 
-		FinalNormals[i] = WaveNormalize(N);
-	//	WaveNormalize(Normals[i])
 	}
-
-	return FinalNormals;
 }
 
 typedef struct
@@ -328,24 +292,29 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 {
 	FILE* File = fopen(Path, "r");
 	if (!File)
-		return;
+		printf("Failed To Load Model!\n");
 
 	unsigned int TempVerticeCount = 1;
 	unsigned int TempUVCount = 1;
 	unsigned int TempNormalCount = 1;
-	WaveVec3* TempVertices = malloc(2 * sizeof(WaveVec3));
-	WaveVec3* TempUVs = malloc(2 * sizeof(WaveVec3));
-	WaveVec3* TempNormals = malloc(2 * sizeof(WaveVec3));
 
-	int WaveHasMaterial = 1;
+	unsigned int TempVerticeAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
+	unsigned int TempUVAllocationCount = 3;
+	unsigned int TempNormalAllocationCount = 3;
+	WaveVec3* TempVertices = (WaveVec3*)malloc(TempVerticeAllocationCount * sizeof(WaveVec3));
+	WaveVec3* TempUVs = (WaveVec3*)malloc(TempUVAllocationCount * sizeof(WaveVec3));
+	WaveVec3* TempNormals = (WaveVec3*)malloc(TempUVAllocationCount * sizeof(WaveVec3));
+
+	int WaveHasMaterial = 0;
 	int MaterialCount = -1;
-	WaveModelMaterial* Material = malloc(1 * sizeof(WaveModelMaterial));
+	WaveModelMaterial* Material = (WaveModelMaterial*)malloc(1 * sizeof(WaveModelMaterial));
 
-	int TempMaterialCount = 0;
-	TempMaterialDescription* TempMaterial = malloc(1 * sizeof(TempMaterialDescription));
+	int ObjMaterialCount = 0;
+	WaveObjMaterialDescription* ObjMaterial = (WaveObjMaterialDescription*)malloc(1 * sizeof(WaveObjMaterialDescription));
 
 	WaveModelMaterial EmptyMaterial =
 	{
+		0,
 		"Default",
 		{ 1.0, 1.0, 1.0 },
 		{ 1.0, 1.0, 1.0 },
@@ -360,11 +329,11 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 	};
 
 	WaveModelData Data;
-	unsigned int MeshCount = 1000;
-	Data.Mesh = malloc(MeshCount * sizeof(WaveMeshData));
+	unsigned int MeshCount = WAVE_ALLOCATION_CHUNK_SIZE;
+	Data.Mesh = (WaveMeshData*)malloc(MeshCount * sizeof(WaveMeshData));
 	Data.Mesh->VerticeCount = 0;
 
-	VertexReference* VertexReferenc = malloc(4 * sizeof(VertexReference));
+	VertexReference* VertexReferenc = (VertexReference*)malloc(4 * sizeof(VertexReference));
 	unsigned int VertexReferencCount = 0;
 
 	while (1)
@@ -378,14 +347,16 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 		if (strcmp(LineHeader, "mtllib") == 0 && (Settings & WAVE_LOAD_MATERIAL))
 		{
 			char Path[2048];
-			fscanf(File, "%s\n", &Path);
 
-			FILE* MatFile = fopen(Path, "r");
+			fscanf(File, "%[^\r\n]%*c\r\n", &Path);
+
+			printf("%s\n", Path + 1);
+
+			FILE* MatFile = fopen(Path + 1, "r");
 			if (!MatFile)
-			{
-				WaveHasMaterial = 0;
 				goto NoMatterial;
-			}
+			else
+				WaveHasMaterial = 1;
 
 			while (1)
 			{
@@ -430,7 +401,7 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 					MaterialCount++;
 					fscanf(MatFile, "%s\n", &Material[MaterialCount].MaterialName);
 
-					Material = realloc(Material, (MaterialCount + 2) * sizeof(WaveModelMaterial));
+					Material = (WaveModelMaterial*)realloc(Material, (MaterialCount + 2) * sizeof(WaveModelMaterial));
 
 				}
 			}
@@ -439,33 +410,48 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 		}
 	NoMatterial:
 
-		if (strcmp(LineHeader, "usemtl") == 0 && Settings & WAVE_LOAD_MATERIAL)
+		if (strcmp(LineHeader, "usemtl") == 0 && WaveHasMaterial == 1 && Settings & WAVE_LOAD_MATERIAL)
 		{
-			fscanf(File, "%s\n", &TempMaterial[TempMaterialCount].Name);
-			TempMaterial[TempMaterialCount].Pos = Data.Mesh->VerticeCount;
-			TempMaterialCount++;
-			TempMaterial = realloc(TempMaterial, (TempMaterialCount + 1) * sizeof(TempMaterialDescription));
+			fscanf(File, "%s\n", &ObjMaterial[ObjMaterialCount].Name);
+			ObjMaterial[ObjMaterialCount].Pos = Data.Mesh->VerticeCount;
+			ObjMaterialCount++;
+			ObjMaterial = (WaveObjMaterialDescription*)realloc(ObjMaterial, (ObjMaterialCount + 1) * sizeof(WaveObjMaterialDescription));
 		}
 
 		if (strcmp(LineHeader, "v") == 0)
 		{
 			fscanf(File, "%f %f %f\n", &TempVertices[TempVerticeCount].x, &TempVertices[TempVerticeCount].y, &TempVertices[TempVerticeCount].z);
 			TempVerticeCount++;
-			TempVertices = realloc(TempVertices, (TempVerticeCount + 1) * sizeof(WaveVec3));
+
+			if (TempVerticeCount == TempVerticeAllocationCount - 1)
+			{
+				TempVerticeAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
+				TempVertices = (WaveVec3*)realloc(TempVertices, TempVerticeAllocationCount * sizeof(WaveVec3));
+			}
 		}
 
 		if (strcmp(LineHeader, "vt") == 0)
 		{
 			fscanf(File, "%f %f\n", &TempUVs[TempUVCount].x, &TempUVs[TempUVCount].y);
 			TempUVCount++;
-			TempUVs = realloc(TempUVs, (TempUVCount + 1) * sizeof(WaveVec3));
+
+			if (TempUVCount == TempUVAllocationCount - 1)
+			{
+				TempUVAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
+				TempUVs = (WaveVec3*)realloc(TempUVs, TempUVAllocationCount * sizeof(WaveVec3));
+			}
 		}
 
 		if (strcmp(LineHeader, "vn") == 0)
 		{
 			fscanf(File, "%f %f %f\n", &TempNormals[TempNormalCount].x, &TempNormals[TempNormalCount].y, &TempNormals[TempNormalCount].z);
 			TempNormalCount++;
-			TempNormals = realloc(TempNormals, (TempNormalCount + 1) * sizeof(WaveVec3));
+
+			if (TempNormalCount == TempNormalAllocationCount - 1)
+			{
+				TempNormalAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
+				TempNormals = (WaveVec3*)realloc(TempNormals, TempNormalAllocationCount * sizeof(WaveVec3));
+			}
 		}
 
 		if (strcmp(LineHeader, "f") == 0)
@@ -482,7 +468,7 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 				int v = 0;
 				int vt = 0;
 				int vn = 0;
-				
+
 				if (TempVerticeCount > 1 && TempUVCount > 1 && TempNormalCount > 1)
 					sscanf(TempLine, "%d/%d/%d", &v, &vt, &vn);
 
@@ -510,20 +496,26 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 			for (unsigned int i = 1; i + 1 < VertexReferencCount; i++)
 			{
 				VertexReference* p[3] = { &VertexReferenc[0], &VertexReferenc[i], &VertexReferenc[i + 1] };
-				
-				WaveVec3 NullVec = { 0.0, 0.0, 0.0 };
+
+				const WaveVec3 NullVec = { 0.0, 0.0, 0.0 };
 
 				for (size_t j = 0; j < 3; j++)
 				{
 					Data.Mesh[Data.Mesh->VerticeCount].Vertices = TempVertices[p[j]->V];
 					Data.Mesh[Data.Mesh->VerticeCount].TexCoords = TempUVs[p[j]->VT];
 					Data.Mesh[Data.Mesh->VerticeCount].Normals = p[j]->VN != 0 ? TempNormals[p[j]->VN] : NullVec;
+					Data.Mesh[Data.Mesh->VerticeCount].VertexColor.x = 1.0;
+					Data.Mesh[Data.Mesh->VerticeCount].VertexColor.y = 1.0;
+					Data.Mesh[Data.Mesh->VerticeCount].VertexColor.z = 1.0;
+
+					if ((Settings & WAVE_GEN_UVS) && TempUVCount == 1)
+						WaveGenUVs(&Data, Data.Mesh->VerticeCount);
 
 					Data.Mesh->VerticeCount++;
 					if (Data.Mesh->VerticeCount == MeshCount - 1)
 					{
-						MeshCount += 1000;
-						Data.Mesh = realloc(Data.Mesh, (MeshCount) * sizeof(WaveMeshData));
+						MeshCount += WAVE_ALLOCATION_CHUNK_SIZE;
+						Data.Mesh = (WaveMeshData*)realloc(Data.Mesh, MeshCount * sizeof(WaveMeshData));
 					}
 				}
 			}
@@ -532,46 +524,37 @@ WaveModelData WaveLoadOBJ(const char* Path, WaveSettings Settings)
 
 	fclose(File);
 
-	for (unsigned int i = 0; i < TempMaterialCount; i++)
+	if (WaveHasMaterial && (Settings & WAVE_LOAD_MATERIAL))
 	{
-		for (int j = 0; j < MaterialCount + 1; j++)
+		Data.HasMaterial = 1;
+		Data.Material = (WaveModelMaterial*)malloc(ObjMaterialCount * sizeof(WaveModelMaterial));
+		int Pos = 0;
+
+		Material = (WaveModelMaterial*)realloc(Material, ObjMaterialCount * sizeof(WaveModelMaterial));
+
+		for (unsigned int i = 0; i < ObjMaterialCount; i++)
 		{
-			if (strcmp(TempMaterial[i].Name, Material[j].MaterialName) == 0)
+			for (int j = 0; j < MaterialCount + 1; j++)
 			{
-				WaveModelMaterial TempMat = Material[j];
-				Material[j] = Material[i];
-				Material[i] = TempMat;
+				if (strcmp(ObjMaterial[i].Name, Material[j].MaterialName) == 0)
+				{
+					Data.Material[Pos] = Material[j];
+					Data.Material[Pos].VertexIndex = ObjMaterial[i].Pos;
+					Pos++;
+				}
 			}
 		}
 	}
-
-
-	Data.Material = malloc(Data.Mesh->VerticeCount * sizeof(WaveModelMaterial));
-
-	int Pos = 0;
-	
-	for (unsigned int i = 0; i < Data.Mesh->VerticeCount; i++)
-	{
-		if (WaveHasMaterial && (Settings & WAVE_LOAD_MATERIAL))
-		{
-			if (TempMaterial[Pos].Pos == i)
-				Pos++;
-	
-			Data.Material[i] = Material[Pos - 1];
-		}
-		else
-			Data.Material[i] = EmptyMaterial;
-	}
-	
+	else
+		Data.HasMaterial = 0;
 
 	if ((Settings & WAVE_GEN_NORMALS) && TempNormalCount == 1)
 		WaveGenNormals(&Data);
 
-	if ((Settings & WAVE_GEN_UVS) && TempUVCount == 1)
-		WaveGenUVs(&Data);
+	//	WaveGenSmoothNormals(&Data);
 
 	free(Material);
-	free(TempMaterial);
+	free(ObjMaterial);
 
 	free(TempVertices);
 	free(TempUVs);
@@ -586,55 +569,53 @@ typedef struct
 	unsigned int Triangles;
 } WaveSTLDescription;
 
-typedef struct WaveSTLDescription
+#pragma pack(push)
+#pragma pack(1)
+
+typedef struct
 {
 	WaveVec3 Normal;
 	WaveVec3 Vertex1;
 	WaveVec3 Vertex2;
 	WaveVec3 Vertex3;
-	short int ByteCount;
+	short ByteCount;
 } WaveSTLVertex;
+
+#pragma pack(pop)
 
 WaveModelData WaveLoadSTL(const char* Path, WaveSettings Settings)
 {
 	FILE* File = fopen(Path, "rb");
 	if (!File)
-		return;
+		printf("Failed To Load Model!\n");
 
-	WaveSTLVertex* VertexArray;
-	WaveSTLDescription Description;
+	char* Buffer;
+	long Length;
 
-	fread(&Description, sizeof(Description), 1, File);
-	VertexArray = malloc(Description.Triangles * sizeof(WaveSTLVertex));
+	fseek(File, 0L, SEEK_END);
+	Length = ftell(File);
+	fseek(File, 0L, SEEK_SET);
 
-	unsigned int VerticeCount = Description.Triangles * 3;
+	Buffer = (char*)malloc(Length);
+	fread(Buffer, Length, 1, File);
 
-	WaveModelMaterial EmptyMaterial =
-	{
-		"Default",
-		{ 1.0, 1.0, 1.0 },
-		{ 1.0, 1.0, 1.0 },
-		1.0,
-		{ 1.0, 1.0, 1.0 },
-		"NoTexture",
-		"NoTexture",
-		"NoTexture",
-		"NoTexture",
-		"NoTexture",
-		"NoTexture"
-	};
+	WaveSTLDescription* Description = (WaveSTLDescription*)Buffer;
+	Buffer += sizeof(WaveSTLDescription);
+
+	WaveSTLVertex* VertexArray = (WaveSTLVertex*)Buffer;
+
+	unsigned int VerticeCount = Description->Triangles * 3;
 
 	WaveModelData Data;
-	Data.Material = malloc(VerticeCount * sizeof(WaveModelMaterial));
+	Data.HasMaterial = 0;
+	Data.Mesh = (WaveMeshData*)malloc(VerticeCount * sizeof(WaveMeshData));
 	Data.Mesh->VerticeCount = VerticeCount;
 
-	Data.Mesh = malloc(VerticeCount * sizeof(WaveMeshData));
+	WaveVec3 DefaultColor = { 1.0, 1.0, 1.0 };
 
 	unsigned int j = 0;
-	for (unsigned int i = 0; i < Description.Triangles; i++)
+	for (unsigned int i = 0; i < Description->Triangles; i++)
 	{
-		fread(&VertexArray[i], 50, 1, File);
-
 		Data.Mesh[j].Vertices = VertexArray[i].Vertex1;
 		Data.Mesh[j + 1].Vertices = VertexArray[i].Vertex2;
 		Data.Mesh[j + 2].Vertices = VertexArray[i].Vertex3;
@@ -643,18 +624,23 @@ WaveModelData WaveLoadSTL(const char* Path, WaveSettings Settings)
 		Data.Mesh[j + 1].Normals = VertexArray[i].Normal;
 		Data.Mesh[j + 2].Normals = VertexArray[i].Normal;
 
-		Data.Material[j] = EmptyMaterial;
-		Data.Material[j + 1] = EmptyMaterial;
-		Data.Material[j + 2] = EmptyMaterial;
+		Data.Mesh[j].VertexColor = DefaultColor;
+		Data.Mesh[j + 1].VertexColor = DefaultColor;
+		Data.Mesh[j + 2].VertexColor = DefaultColor;
+		if (Settings & WAVE_GEN_UVS)
+		{
+			WaveGenUVs(&Data, j);
+			WaveGenUVs(&Data, j + 1);
+			WaveGenUVs(&Data, j + 2);
+		}
+
 
 		j += 3;
 	}
 
-	if (Settings & WAVE_GEN_UVS)
-		WaveGenUVs(&Data.Mesh);
-
 	fclose(File);
-	free(VertexArray);
+	free(Description);
+	//	free(VertexArray);
 
 	return Data;
 }
@@ -670,7 +656,7 @@ typedef struct
 WaveLine* WaveGetLines(char* Buffer, long BufferLength)
 {
 	unsigned int AllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	WaveLine* FinalLines = malloc(AllocationCount * sizeof(WaveLine));
+	WaveLine* FinalLines = (WaveLine*)malloc(AllocationCount * sizeof(WaveLine));
 
 	unsigned int LineCount = 0;
 
@@ -685,8 +671,8 @@ WaveLine* WaveGetLines(char* Buffer, long BufferLength)
 		if (LineCount == AllocationCount - 1)
 		{
 			AllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-			FinalLines = realloc(FinalLines, AllocationCount * sizeof(WaveLine));
-		}		
+			FinalLines = (WaveLine*)realloc(FinalLines, AllocationCount * sizeof(WaveLine));
+		}
 
 		p = strtok(NULL, "\n");
 	}
@@ -719,7 +705,7 @@ WaveFloatArray GetFloatsFromString(char* Line, long Length)
 	WaveFloatArray FinalArray;
 
 	unsigned int AllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	float* FloatArray = malloc(AllocationCount * sizeof(float));
+	float* FloatArray = (float*)malloc(AllocationCount * sizeof(float));
 	unsigned int FloatArrayCount = 0;
 
 	char* p = strtok(Line, " ");
@@ -731,7 +717,7 @@ WaveFloatArray GetFloatsFromString(char* Line, long Length)
 		if (FloatArrayCount == AllocationCount - 1)
 		{
 			AllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-			FloatArray = realloc(FloatArray, AllocationCount * sizeof(float));
+			FloatArray = (float*)realloc(FloatArray, AllocationCount * sizeof(float));
 		}
 
 		p = strtok(NULL, " ");
@@ -746,7 +732,7 @@ WaveFloatArray GetFloatsFromString(char* Line, long Length)
 WaveFloatArray WaveGetFloatsFromLine(char* Line, long Length)
 {
 	unsigned int AllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	char* FloatLine = malloc(AllocationCount * sizeof(char));
+	char* FloatLine = (char*)malloc(AllocationCount * sizeof(char));
 	unsigned int FloatLineCount = 0;
 
 	WaveFloatArray FloatArray;
@@ -755,7 +741,7 @@ WaveFloatArray WaveGetFloatsFromLine(char* Line, long Length)
 	{
 		if (Line[i] == '>')
 		{
-			FloatLine = malloc(AllocationCount * sizeof(char));
+			FloatLine = (char*)malloc(AllocationCount * sizeof(char));
 			FloatLineCount = 0;
 
 			while (1)
@@ -771,11 +757,11 @@ WaveFloatArray WaveGetFloatsFromLine(char* Line, long Length)
 
 				FloatLine[FloatLineCount] = Line[i];
 				FloatLineCount++;
-			
+
 				if (FloatLineCount == AllocationCount - 1)
 				{
 					AllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-					FloatLine = realloc(FloatLine, AllocationCount * sizeof(char));
+					FloatLine = (char*)realloc(FloatLine, AllocationCount * sizeof(char));
 				}
 			}
 
@@ -800,11 +786,11 @@ WaveTempMeshData WaveGetMeshData(WaveLine* Lines)
 	WaveTempMeshData MeshData;
 
 	unsigned int FloatArrayAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	WaveFloatArray* FloatArray = malloc(FloatArrayAllocationCount * sizeof(WaveFloatArray));
+	WaveFloatArray* FloatArray = (WaveFloatArray*)malloc(FloatArrayAllocationCount * sizeof(WaveFloatArray));
 	unsigned int FloatArrayCount = 0;
 
 	unsigned int VertexOrderAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	WaveCharArray* VertexOrder = malloc(VertexOrderAllocationCount * sizeof(WaveCharArray));
+	WaveCharArray* VertexOrder = (WaveCharArray*)malloc(VertexOrderAllocationCount * sizeof(WaveCharArray));
 	unsigned int VertexCount = 0;
 
 	for (unsigned int i = 0; i < Lines->LineCount; i++)
@@ -828,12 +814,12 @@ WaveTempMeshData WaveGetMeshData(WaveLine* Lines)
 					if (FloatArrayCount == FloatArrayAllocationCount - 1)
 					{
 						FloatArrayAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-						FloatArray = realloc(FloatArray, FloatArrayAllocationCount * sizeof(WaveFloatArray));
+						FloatArray = (WaveFloatArray*)realloc(FloatArray, FloatArrayAllocationCount * sizeof(WaveFloatArray));
 					}
 				}
 
 				char* FoundIndex = strstr(Lines[i].Line, "<p>");
-			
+
 				if (FoundIndex)
 				{
 					FloatArray[FloatArrayCount] = WaveGetFloatsFromLine(Lines[i].Line, Lines[i].Length);
@@ -842,7 +828,7 @@ WaveTempMeshData WaveGetMeshData(WaveLine* Lines)
 					if (FloatArrayCount == FloatArrayAllocationCount - 1)
 					{
 						FloatArrayAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-						FloatArray = realloc(FloatArray, FloatArrayAllocationCount * sizeof(WaveFloatArray));
+						FloatArray = (WaveFloatArray*)realloc(FloatArray, FloatArrayAllocationCount * sizeof(WaveFloatArray));
 					}
 				}
 
@@ -853,11 +839,11 @@ WaveTempMeshData WaveGetMeshData(WaveLine* Lines)
 					VertexOrder[VertexCount].CharArray = Lines[i].Line;
 					VertexOrder[VertexCount].CharArrayCount = strlen(Lines[i].Line);
 					VertexCount++;
-					
+
 					if (VertexCount == VertexOrderAllocationCount - 1)
 					{
 						VertexOrderAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-						VertexOrder = realloc(VertexOrder, VertexOrderAllocationCount * sizeof(WaveCharArray));
+						VertexOrder = (WaveCharArray*)realloc(VertexOrder, VertexOrderAllocationCount * sizeof(WaveCharArray));
 					}
 				}
 
@@ -871,10 +857,10 @@ WaveTempMeshData WaveGetMeshData(WaveLine* Lines)
 
 	MeshData.FloatArray = FloatArray;
 
-	MeshData.VertexPos = 256;
-	MeshData.NormalPos = 256;
-	MeshData.TexCoordPos = 256;
-	MeshData.ColorPos = 256;
+	MeshData.VertexPos = UINT32_MAX;
+	MeshData.NormalPos = UINT32_MAX;
+	MeshData.TexCoordPos = UINT32_MAX;
+	MeshData.ColorPos = UINT32_MAX;
 
 	for (unsigned int i = 0; i < VertexOrder->ArrayCount; i++)
 	{
@@ -911,7 +897,7 @@ WaveModelData WaveLoadDAE(const char* Path, WaveSettings Settings)
 
 	FILE* File = fopen(Path, "r");
 	if (!File)
-		return;
+		printf("Failed To Load Model!\n");
 
 	fseek(File, 0, SEEK_END);
 	Length = ftell(File);
@@ -923,23 +909,27 @@ WaveModelData WaveLoadDAE(const char* Path, WaveSettings Settings)
 	WaveTempMeshData MeshData = WaveGetMeshData(Lines);
 
 	unsigned int FinalVerticesAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	WaveVec3* FinalVertices = malloc(FinalVerticesAllocationCount * sizeof(WaveVec3));
+	WaveVec3* FinalVertices = (WaveVec3*)malloc(FinalVerticesAllocationCount * sizeof(WaveVec3));
 	unsigned int FinalNormalsAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	WaveVec3* FinalNormlas = malloc(FinalNormalsAllocationCount * sizeof(WaveVec3));
+	WaveVec3* FinalNormlas = (WaveVec3*)malloc(FinalNormalsAllocationCount * sizeof(WaveVec3));
 	unsigned int FinalTexCoordsAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	WaveVec3* FinalTexCoords = malloc(FinalTexCoordsAllocationCount * sizeof(WaveVec3));
+	WaveVec3* FinalTexCoords = (WaveVec3*)malloc(FinalTexCoordsAllocationCount * sizeof(WaveVec3));
 	unsigned int FinalColorsAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
-	WaveVec3* FinalColors = malloc(FinalColorsAllocationCount * sizeof(WaveVec3));
+	WaveVec3* FinalColors = (WaveVec3*)malloc(FinalColorsAllocationCount * sizeof(WaveVec3));
 
 	unsigned int VerticesCount = 0;
 	unsigned int NormalCount = 0;
 	unsigned int TexCoordCount = 0;
 	unsigned int ColorCount = 0;
 	//Indices
-	unsigned int* FinalVerticeIndices = malloc(1 * sizeof(unsigned int));
-	unsigned int* FinalNormlaIndices = malloc(1 * sizeof(unsigned int));
-	unsigned int* FinalTexCoordIndices = malloc(1 * sizeof(unsigned int));
-	unsigned int* FinalColorIndices = malloc(1 * sizeof(unsigned int));
+	unsigned int FinalVerticeIndicesAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
+	unsigned int* FinalVerticeIndices = (unsigned int*)malloc(FinalVerticeIndicesAllocationCount * sizeof(unsigned int));
+	unsigned int FinalNormalIndicesAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
+	unsigned int* FinalNormlaIndices = (unsigned int*)malloc(FinalNormalIndicesAllocationCount * sizeof(unsigned int));
+	unsigned int FinalTexCoordIndicesAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
+	unsigned int* FinalTexCoordIndices = (unsigned int*)malloc(FinalTexCoordIndicesAllocationCount * sizeof(unsigned int));
+	unsigned int FinalColorIndicesAllocationCount = WAVE_ALLOCATION_CHUNK_SIZE;
+	unsigned int* FinalColorIndices = (unsigned int*)malloc(FinalColorIndicesAllocationCount * sizeof(unsigned int));
 
 	unsigned int VerticesIndicesCount = 0;
 	unsigned int NormalIndicesCount = 0;
@@ -956,110 +946,111 @@ WaveModelData WaveLoadDAE(const char* Path, WaveSettings Settings)
 		if (VerticesCount == FinalVerticesAllocationCount - 1)
 		{
 			FinalVerticesAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-			FinalVertices = realloc(FinalVertices, FinalVerticesAllocationCount * sizeof(WaveVec3));
+			FinalVertices = (WaveVec3*)realloc(FinalVertices, FinalVerticesAllocationCount * sizeof(WaveVec3));
 		}
 	}
 
-	if (MeshData.NormalPos != 256)
+	if (MeshData.NormalPos != UINT32_MAX)
 		for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.NormalPos].FloatArrayCount; i += 3)
 		{
 			FinalNormlas[NormalCount].x = MeshData.FloatArray[MeshData.NormalPos].FloatArray[i];
 			FinalNormlas[NormalCount].y = MeshData.FloatArray[MeshData.NormalPos].FloatArray[i + 1];
 			FinalNormlas[NormalCount].z = MeshData.FloatArray[MeshData.NormalPos].FloatArray[i + 2];
 			NormalCount++;
-			
+
 			if (NormalCount == FinalNormalsAllocationCount - 1)
 			{
 				FinalNormalsAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-				FinalNormlas = realloc(FinalNormlas, FinalNormalsAllocationCount * sizeof(WaveVec3));
+				FinalNormlas = (WaveVec3*)realloc(FinalNormlas, FinalNormalsAllocationCount * sizeof(WaveVec3));
 			}
 		}
 
-	if (MeshData.TexCoordPos != 256)
+	if (MeshData.TexCoordPos != UINT32_MAX)
 		for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.TexCoordPos].FloatArrayCount; i += 2)
 		{
 			FinalTexCoords[TexCoordCount].x = MeshData.FloatArray[MeshData.TexCoordPos].FloatArray[i];
 			FinalTexCoords[TexCoordCount].y = MeshData.FloatArray[MeshData.TexCoordPos].FloatArray[i + 1];
 			FinalTexCoords[TexCoordCount].z = 0.0;
 			TexCoordCount++;
-			
+
 			if (TexCoordCount == FinalTexCoordsAllocationCount - 1)
 			{
 				FinalTexCoordsAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-				FinalTexCoords = realloc(FinalTexCoords, FinalTexCoordsAllocationCount * sizeof(WaveVec3));
+				FinalTexCoords = (WaveVec3*)realloc(FinalTexCoords, FinalTexCoordsAllocationCount * sizeof(WaveVec3));
 			}
 		}
 
-	if (MeshData.ColorPos != 256)
+	if (MeshData.ColorPos != UINT32_MAX)
 		for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.ColorPos].FloatArrayCount; i += 4)
 		{
 			FinalColors[ColorCount].x = MeshData.FloatArray[MeshData.ColorPos].FloatArray[i];
 			FinalColors[ColorCount].y = MeshData.FloatArray[MeshData.ColorPos].FloatArray[i + 1];
 			FinalColors[ColorCount].z = MeshData.FloatArray[MeshData.ColorPos].FloatArray[i + 2];
 			ColorCount++;
-			
+
 			if (ColorCount == FinalColorsAllocationCount - 1)
 			{
 				FinalColorsAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
-				FinalColors = realloc(FinalColors, FinalColorsAllocationCount * sizeof(WaveVec3));
+				FinalColors = (WaveVec3*)realloc(FinalColors, FinalColorsAllocationCount * sizeof(WaveVec3));
 			}
 		}
 
-	for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.FloatArray->ArrayCount-1].FloatArrayCount; i += MeshData.FloatArray->ArrayCount-1)
+	for (unsigned int i = 0; i < MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArrayCount; i += MeshData.FloatArray->ArrayCount - 1)
 	{
 		FinalVerticeIndices[VerticesIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.VertexPos];
 		VerticesIndicesCount++;
-		FinalVerticeIndices = realloc(FinalVerticeIndices, (VerticesIndicesCount + 1) * sizeof(unsigned int));
+		if (VerticesIndicesCount == FinalVerticeIndicesAllocationCount - 1)
+		{
+			FinalVerticeIndicesAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
+			FinalVerticeIndices = (unsigned int*)realloc(FinalVerticeIndices, FinalVerticeIndicesAllocationCount * sizeof(unsigned int));
+		}
 
 		if (NormalCount != 0)
 		{
 			FinalNormlaIndices[NormalIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.NormalPos];
 			NormalIndicesCount++;
-			FinalNormlaIndices = realloc(FinalNormlaIndices, (NormalIndicesCount + 1) * sizeof(unsigned int));
+			if (NormalIndicesCount == FinalNormalIndicesAllocationCount - 1)
+			{
+				FinalNormalIndicesAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
+				FinalNormlaIndices = (unsigned int*)realloc(FinalNormlaIndices, FinalNormalIndicesAllocationCount * sizeof(unsigned int));
+			}
 		}
-			
+
 		if (TexCoordCount != 0)
 		{
 			FinalTexCoordIndices[TexCoordIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.TexCoordPos];
 			TexCoordIndicesCount++;
-			FinalTexCoordIndices = realloc(FinalTexCoordIndices, (TexCoordIndicesCount + 1) * sizeof(unsigned int));
+			if (TexCoordIndicesCount == FinalTexCoordIndicesAllocationCount - 1)
+			{
+				FinalTexCoordIndicesAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
+				FinalTexCoordIndices = (unsigned int*)realloc(FinalTexCoordIndices, FinalTexCoordIndicesAllocationCount * sizeof(unsigned int));
+			}
 		}
-			
+
 		if (ColorCount != 0)
 		{
 			FinalColorIndices[ColorIndicesCount] = MeshData.FloatArray[MeshData.FloatArray->ArrayCount - 1].FloatArray[i + MeshData.ColorPos];
 			ColorIndicesCount++;
-			FinalColorIndices = realloc(FinalColorIndices, (ColorIndicesCount + 1) * sizeof(unsigned int));
+			if (ColorIndicesCount == FinalColorIndicesAllocationCount - 1)
+			{
+				FinalColorIndicesAllocationCount += WAVE_ALLOCATION_CHUNK_SIZE;
+				FinalColorIndices = (unsigned int*)realloc(FinalColorIndices, FinalColorIndicesAllocationCount * sizeof(unsigned int));
+			}
 		}
 	}
 
-	WaveModelMaterial EmptyMaterial =
-	{
-		"Default",
-		{ 1.0, 1.0, 1.0 },
-		{ 1.0, 1.0, 1.0 },
-		1.0,
-		{ 1.0, 1.0, 1.0 },
-		"NoTexture",
-		"NoTexture",
-		"NoTexture",
-		"NoTexture",
-		"NoTexture",
-		"NoTexture"
-	};
-
 	WaveModelData Data;
-	Data.Material = malloc(VerticesIndicesCount * sizeof(WaveModelMaterial));
-	Data.Mesh = malloc(VerticesIndicesCount * sizeof(WaveMeshData));
+	Data.HasMaterial = 0;
+	Data.Mesh = (WaveMeshData*)malloc(VerticesIndicesCount * sizeof(WaveMeshData));
 	Data.Mesh->VerticeCount = VerticesIndicesCount;
 
 	for (unsigned int i = 0; i < VerticesIndicesCount; i++)
 	{
 		Data.Mesh[i].Vertices = FinalVertices[FinalVerticeIndices[i]];
-		
+
 		if (NormalIndicesCount != 0)
 			Data.Mesh[i].Normals = FinalNormlas[FinalNormlaIndices[i]];
-			
+
 		if (TexCoordIndicesCount != 0)
 		{
 			if (Settings & WAVE_FLIP_UVS)
@@ -1070,22 +1061,25 @@ WaveModelData WaveLoadDAE(const char* Path, WaveSettings Settings)
 			else
 				Data.Mesh[i].TexCoords = FinalTexCoords[FinalTexCoordIndices[i]];
 		}
-			
+
 
 		if (ColorIndicesCount != 0)
-		{
-			Data.Material[i] = EmptyMaterial;
-			Data.Material[i].DiffuseColor = FinalColors[FinalColorIndices[i]];
-		}
+			Data.Mesh[i].VertexColor = FinalColors[FinalColorIndices[i]];
 		else
-			Data.Material[i] = EmptyMaterial;
+		{
+			Data.Mesh[i].VertexColor.x = 1.0;
+			Data.Mesh[i].VertexColor.y = 1.0;
+			Data.Mesh[i].VertexColor.z = 1.0;
+		}
+
+		if ((Settings & WAVE_GEN_UVS) && TexCoordIndicesCount == 0)
+			WaveGenUVs(&Data, i);
+		//	else
+		//		Data.Material[i] = EmptyMaterial;
 	}
-//	Data.Normals = WaveGenSmoothNormals(VerticesIndicesCount, Data.Vertices);
+	//	Data.Normals = WaveGenSmoothNormals(VerticesIndicesCount, Data.Vertices);
 	if ((Settings & WAVE_GEN_NORMALS) && NormalIndicesCount == 0)
 		WaveGenNormals(&Data);
-
-	if ((Settings & WAVE_GEN_UVS) && TexCoordIndicesCount == 0)
-		WaveGenUVs(&Data);
 
 	free(Buffer);
 	free(Lines);
@@ -1106,7 +1100,7 @@ WaveModelData WaveLoadDAE(const char* Path, WaveSettings Settings)
 WaveModelData WaveLoadModel(const char* Path, WaveSettings Settings)
 {
 	WaveModelData ModelData;
-	char* Extension = strchr(Path, '.');
+	const char* Extension = strchr(Path, '.');
 
 	if (strcmp(Extension + 1, "obj") == 0)
 		ModelData = WaveLoadOBJ(Path, Settings);
@@ -1122,6 +1116,7 @@ WaveModelData WaveLoadModel(const char* Path, WaveSettings Settings)
 
 void WaveFreeModel(WaveModelData* ModelData)
 {
-	free(ModelData->Material);
+	if (ModelData->HasMaterial == 1)
+		free(ModelData->Material);
 	free(ModelData->Mesh);
 }

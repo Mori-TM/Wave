@@ -43,26 +43,26 @@ for (int i = 0; i < ModelData->Mesh->VerticeCount; i++)
   Vertices.Normal.y = ModelData.Mesh[i].Normals.y;
   Vertices.Normal.z = ModelData.Mesh[i].Normals.z;
   
-  //check if Model Has Material
-  if (ModelData->HasMaterial == 1)
-		{
-			if (ModelData->Material[MaterialIndex].VertexIndex == i)
-				MaterialIndex++;
+  	//check if Model Has Material
+	if (ModelData->HasMaterial == 1)
+	{
+		if (ModelData->Material[MaterialIndex].VertexIndex == i)
+			MaterialIndex++;
 
-			Vertices.Vertex.AmbientColor.x = ModelData->Material[MaterialIndex-1].AmbientColor.x;
-			Vertices.Vertex.AmbientColor.y = ModelData->Material[MaterialIndex-1].AmbientColor.y;
-			Vertices.Vertex.AmbientColor.z = ModelData->Material[MaterialIndex-1].AmbientColor.z;
-      
-      Vertices.Vertex.DiffuseColor.x = ModelData->Material[MaterialIndex-1].DiffuseColor.x;
-			Vertices.Vertex.DiffuseColor.y = ModelData->Material[MaterialIndex-1].DiffuseColor.y;
-			Vertices.Vertex.DiffuseColor.z = ModelData->Material[MaterialIndex-1].DiffuseColor.z;
-		}
-		else
-		{
-			Vertices.Vertex.Color.x = ModelData->Mesh[i].VertexColor.x;
-			Vertices.Vertex.Color.y = ModelData->Mesh[i].VertexColor.y;
-			Vertices.Vertex.Color.z = ModelData->Mesh[i].VertexColor.z;
-		}
+		Vertices.Vertex.AmbientColor.x = ModelData->Material[MaterialIndex-1].AmbientColor.x;
+		Vertices.Vertex.AmbientColor.y = ModelData->Material[MaterialIndex-1].AmbientColor.y;
+		Vertices.Vertex.AmbientColor.z = ModelData->Material[MaterialIndex-1].AmbientColor.z;
+
+		Vertices.Vertex.DiffuseColor.x = ModelData->Material[MaterialIndex-1].DiffuseColor.x;
+		Vertices.Vertex.DiffuseColor.y = ModelData->Material[MaterialIndex-1].DiffuseColor.y;
+		Vertices.Vertex.DiffuseColor.z = ModelData->Material[MaterialIndex-1].DiffuseColor.z;
+	}
+	else
+	{
+		Vertices.Vertex.Color.x = ModelData->Mesh[i].VertexColor.x;
+		Vertices.Vertex.Color.y = ModelData->Mesh[i].VertexColor.y;
+		Vertices.Vertex.Color.z = ModelData->Mesh[i].VertexColor.z;
+	}
 }	
 
 WaveFreeModel(&ModelData);

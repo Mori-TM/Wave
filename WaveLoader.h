@@ -196,7 +196,7 @@ char* WaveLoadFile(const char* Path, size_t* Length)
 	Buffer[FileSize] = '\0';
 	fclose(File);
 
-	*Length = FileSize;
+	*Length = FileSize + 1;
 
 	return Buffer;
 }
@@ -1081,7 +1081,7 @@ extern inline WaveModelData WaveLoadModel(const char* Path, uint32_t Settings)
 
 	size_t FileSize = 0;
 	char* Buffer = WaveLoadFile(Path, &FileSize);
-	if (Buffer == NULL)
+	if (Buffer == NULL || FileSize == 0)
 	{
 		printf("Failed to open Model: %s\n", Path);
 

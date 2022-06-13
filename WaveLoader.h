@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdarg.h>
 #include <float.h>
 #include <math.h>
 

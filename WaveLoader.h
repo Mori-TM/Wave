@@ -204,7 +204,7 @@ char* WaveLoadFile(const char* Path, size_t* Length)
 WaveLine* WaveGetLinesFromBuffer(size_t Length, char* Buffer, uint32_t* LineCount)
 {
 	uint32_t Count = 0;
-	for (uint32_t i = 0; i < Length; i++)
+	for (size_t i = 0; i < Length; i++)
 		if (Buffer[i] == '\n')
 			Count++;
 
@@ -230,6 +230,13 @@ WaveLine* WaveGetLinesFromBuffer(size_t Length, char* Buffer, uint32_t* LineCoun
 	*LineCount = Count;
 
 	return Lines;
+}
+
+extern inline char* WaveStrtok(char* Str, const char Delimiter)
+{
+	while (*Str != Delimiter && *Str != '\0' && *Str != '\n') Str++;
+
+	return Str + 1;
 }
 
 void WaveGenUVs(WaveModelData* Data, uint32_t i)
@@ -478,7 +485,7 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 
 	char FoundMaterialFile = 0;
 
-	int32_t CurrentMaterialIndex = 0;
+	uint32_t CurrentMaterialIndex = 0;
 
 	char HasNormal = 0;
 	char HasTexCoord = 0;
@@ -508,8 +515,8 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 		}
 		else if (Lines[i].Line[0] == 'v' && Lines[i].Line[1] == ' ')
 		{
-			HasNormal = 0;
-			HasTexCoord = 0;
+		//	HasNormal = 0;
+		//	HasTexCoord = 0;
 			WaveScan(Lines[i].Line, "v", "%f %f %f\n", &Vertices[VertexCount].x, &Vertices[VertexCount].y, &Vertices[VertexCount].z);
 			VertexCount++;
 		}
@@ -533,26 +540,18 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 
 			char* TempLine = strtok(Line, " ");
 			while (TempLine)
-			{
-				int32_t v = 0;
-				int32_t vt = 0;
-				int32_t vn = 0;
+			{		
+				char* StrV = TempLine;
+				char* StrVT = WaveStrtok(StrV, '/');
+				char* StrVN = WaveStrtok(StrVT, '/');
 
-				if (VertexCount > 0 && HasTexCoord && HasNormal)
-					sscanf(TempLine, "%d/%d/%d", &v, &vt, &vn);
-			
-				else if (!HasNormal && HasTexCoord)
-					sscanf(TempLine, "%d/%d", &v, &vt);
-			
-				else if (!HasTexCoord && HasNormal)
-					sscanf(TempLine, "%d//%d", &v, &vn);
-			
-				else
-					sscanf(TempLine, "%d", &v);
-			
-				v = (v >= 0 ? v : VertexCount + v);
-				vt = (vt >= 0 ? vt : VertexTextureCount + vt);
-				vn = (vn >= 0 ? vn : VertexNormalCount + vn);
+				int32_t v = atoi(StrV);
+				int32_t vt = atoi(StrVT);
+				int32_t vn = atoi(StrVN);
+				
+				v = (v >= 0 ? v : VertexCount + v + 1);
+				vt = (vt >= 0 ? vt : VertexTextureCount + vt + 1);
+				vn = (vn >= 0 ? vn : VertexNormalCount + vn + 1);
 
 				VertexReferences[VertexReferenceIndex].V = v;
 				VertexReferences[VertexReferenceIndex].VT = vt;
@@ -565,6 +564,7 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 			for (uint32_t m = 1; m + 1 < VertexReferenceIndex; m++)
 			{
 				WaveVertexReference* p[3] = { &VertexReferences[0], &VertexReferences[m], &VertexReferences[m + 1] };
+			//	printf("%d %d %d\n", VertexReferences[0].V, VertexReferences[m].V, VertexReferences[m + 1].V);
 
 				WaveVec3 U = { WaveSub(Vertices[p[1]->V - 1], Vertices[p[0]->V - 1]) };
 				WaveVec3 V = { WaveSub(Vertices[p[2]->V - 1], Vertices[p[0]->V - 1]) };
@@ -1002,14 +1002,14 @@ void WaveProccesMeshData(uint32_t MeshCount, WaveMeshDAE* Meshes, WaveModelData*
 
 				WaveVec3* Vertices = (WaveVec3*)Mesh.MeshData[1].Floats;
 				WaveVec3* VertexNormals = NULL;
-				WaveVec3* VertexTextures = NULL;
+				float* VertexTextures = NULL;
 
 				if (Mesh.UseNormals)
 					VertexNormals = (WaveVec3*)Mesh.MeshData[2].Floats;
 				if (Mesh.UseTextCoords && Mesh.UseNormals)
-					VertexTextures = (WaveVec3*)Mesh.MeshData[3].Floats;
+					VertexTextures = (float*)Mesh.MeshData[3].Floats;
 				else if (Mesh.UseTextCoords && !Mesh.UseNormals)
-					VertexTextures = (WaveVec3*)Mesh.MeshData[2].Floats;
+					VertexTextures = (float*)Mesh.MeshData[2].Floats;
 
 				WaveVec3 U = { WaveSub(*(Vertices + p[1]->V), *(Vertices + p[0]->V)) };
 				WaveVec3 V = { WaveSub(*(Vertices + p[2]->V), *(Vertices + p[0]->V)) };
@@ -1018,13 +1018,24 @@ void WaveProccesMeshData(uint32_t MeshCount, WaveMeshDAE* Meshes, WaveModelData*
 				for (uint32_t j = 0; j < 3; j++)
 				{
 					Data->Vertices[Data->VertexCount].Vertices = *(Vertices + p[j]->V);
-				//	Data->Vertices[Data->VertexCount].TexCoords = VertexTextures != NULL ? *(VertexTextures + p[j]->VT) : NullVec;
-				//	Data->Vertices[Data->VertexCount].Normals = VertexNormals != NULL ? *(VertexNormals + p[j]->VN) : NullVec;
-					Data->Vertices[Data->VertexCount].TexCoords = NullVec;
-					Data->Vertices[Data->VertexCount].Normals = NullVec;
+
+					if (VertexTextures != NULL)
+					{
+						Data->Vertices[Data->VertexCount].TexCoords.x = *(VertexTextures + p[j]->VT);
+						Data->Vertices[Data->VertexCount].TexCoords.y = *(VertexTextures + p[j]->VT + 1);
+					}
+					else
+					{
+						Data->Vertices[Data->VertexCount].TexCoords = NullVec;
+					}
+					
+					Data->Vertices[Data->VertexCount].Normals = VertexNormals != NULL ? *(VertexNormals + p[j]->VN) : NullVec;
+				//	Data->Vertices[Data->VertexCount].TexCoords = NullVec;
+				//	Data->Vertices[Data->VertexCount].Normals = NullVec;
 					Data->Vertices[Data->VertexCount].VertexColor.x = 1.0;
 					Data->Vertices[Data->VertexCount].VertexColor.y = 1.0;
 					Data->Vertices[Data->VertexCount].VertexColor.z = 1.0;
+
 					Data->Vertices[Data->VertexCount].MaterialIndex = 0;
 
 				//	if ((Settings & WAVE_GEN_UVS) && !Mesh.UseTextCoords)

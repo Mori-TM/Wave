@@ -361,18 +361,44 @@ uint32_t WaveGetStringCount(uint32_t StringLength, const char* String, uint32_t 
 void WaveScan(char* Buffer, const char* Token, const char* Format, ...)
 {
 	uint32_t AddCount = strlen(Token);
-	for (uint32_t i = AddCount; i < strlen(Buffer); i++)
+	Buffer += AddCount;
+	while (*Buffer == ' ')
 	{
-		if (Buffer[i] == ' ')
-			AddCount++;
-		else
-			break;
+		Buffer++;
 	}
 
 	va_list Args;
 	va_start(Args, Format);
-	vsscanf(Buffer + AddCount, Format, Args);
+	vsscanf(Buffer, Format, Args);
 	va_end(Args);
+}
+
+char* WaveGetLine(char* Buffer, char** OldBuffer)
+{
+	if (Buffer == NULL)
+		Buffer = *OldBuffer;
+
+	uint32_t i = 0;
+	char Line[2048];
+	memset(Line, 0, 2048);
+
+	while (i < 2048 &&
+		   *Buffer != '\n' &&
+		   *Buffer != '\r' &&
+		   *Buffer != '\0')
+	{
+
+		Line[i] = *Buffer;
+		i++;
+
+		Buffer++;
+	}
+
+	if (i == 0 && *Buffer == '\0')
+		return NULL;
+
+	*OldBuffer = Buffer + 1;
+	return Line;
 }
 
 void WaveLoadMTL(const char* Path, WaveModelData* Data)
@@ -384,56 +410,59 @@ void WaveLoadMTL(const char* Path, WaveModelData* Data)
 	else
 	{
 		int32_t MaterialCount = 0;
-
-		uint32_t MatLineCount = 0;
-		WaveLine* MatLines = WaveGetLinesFromBuffer(MatLength, MatBuffer, &MatLineCount);
-		for (uint32_t j = 0; j < MatLineCount; j++)
-			if (MatLines[j].Line[0] == 'n' && MatLines[j].Line[1] == 'e')
+		
+		char* OldBuffer;
+		char* Line = WaveGetLine(MatBuffer, &OldBuffer);
+		while (Line)
+		{
+			if (Line[0] == 'n' && Line[1] == 'e')
 				MaterialCount++;
+
+			Line = WaveGetLine(NULL, &OldBuffer);
+		}
 
 		Data->Materials = (WaveModelMaterial*)calloc(MaterialCount, sizeof(WaveModelMaterial));
 		MaterialCount = -1;
 
-		for (uint32_t j = 0; j < MatLineCount; j++)
+		Line = WaveGetLine(MatBuffer, &OldBuffer);
+		while (Line)
 		{
-			if (MatLines[j].Line[0] == 'K' && MatLines[j].Line[1] == 'a')
-				WaveScan(MatLines[j].Line, "Ka", "%f %f %f\n", &Data->Materials[MaterialCount].AmbientColor.x, &Data->Materials[MaterialCount].AmbientColor.y, &Data->Materials[MaterialCount].AmbientColor.z);
-			else if (MatLines[j].Line[0] == 'K' && MatLines[j].Line[1] == 'd')
-				WaveScan(MatLines[j].Line, "Kd", "%f %f %f\n", &Data->Materials[MaterialCount].DiffuseColor.x, &Data->Materials[MaterialCount].DiffuseColor.y, &Data->Materials[MaterialCount].DiffuseColor.z);
-			else if (MatLines[j].Line[0] == 'K' && MatLines[j].Line[1] == 's')
-				WaveScan(MatLines[j].Line, "Ks", "%f %f %f\n", &Data->Materials[MaterialCount].SpecularColor.x, &Data->Materials[MaterialCount].SpecularColor.y, &Data->Materials[MaterialCount].SpecularColor.z);
-			else if (MatLines[j].Line[0] == 'N' && MatLines[j].Line[1] == 's')
-				WaveScan(MatLines[j].Line, "Ns", "%f\n", &Data->Materials[MaterialCount].SpecularExponent);
-			else if (MatLines[j].Line[0] == 'd' && MatLines[j].Line[1] == ' ')
-				WaveScan(MatLines[j].Line, "d", "%f\n", &Data->Materials[MaterialCount].Dissolve);
-			else if (MatLines[j].Line[0] == 'm' && MatLines[j].Line[1] == 'a' && MatLines[j].Line[2] == 'p' && MatLines[j].Line[3] == '_' && MatLines[j].Line[4] == 'K' && MatLines[j].Line[5] == 'a' && MatLines[j].Line[6] == ' ')
-				WaveScan(MatLines[j].Line, "map_Ka", "%s\n", Data->Materials[MaterialCount].AmbientTexture);
-			else if (MatLines[j].Line[0] == 'm' && MatLines[j].Line[1] == 'a' && MatLines[j].Line[2] == 'p' && MatLines[j].Line[3] == '_' && MatLines[j].Line[4] == 'K' && MatLines[j].Line[5] == 'd' && MatLines[j].Line[6] == ' ')
-				WaveScan(MatLines[j].Line, "map_Kd", "%s\n", Data->Materials[MaterialCount].DiffuseTexture);
-			else if (MatLines[j].Line[0] == 'm' && MatLines[j].Line[1] == 'a' && MatLines[j].Line[2] == 'p' && MatLines[j].Line[3] == '_' && MatLines[j].Line[4] == 'K' && MatLines[j].Line[5] == 's' && MatLines[j].Line[6] == ' ')
-				WaveScan(MatLines[j].Line, "map_Ks", "%s\n", Data->Materials[MaterialCount].SpecularTexture);
-			else if (MatLines[j].Line[0] == 'm' && MatLines[j].Line[1] == 'a' && MatLines[j].Line[2] == 'p' && MatLines[j].Line[3] == '_' && MatLines[j].Line[4] == 'd' && MatLines[j].Line[5] == ' ')
-				WaveScan(MatLines[j].Line, "map_d", "%s\n", Data->Materials[MaterialCount].AlphaTexture);
-			else if (MatLines[j].Line[0] == 'm' && MatLines[j].Line[1] == 'a' && MatLines[j].Line[2] == 'p' && MatLines[j].Line[3] == '_' && MatLines[j].Line[4] == 'B' && MatLines[j].Line[5] == 'u')
-				WaveScan(MatLines[j].Line, "map_Bump", "%s\n", Data->Materials[MaterialCount].BumpTexture);
-			else if (MatLines[j].Line[0] == 'm' && MatLines[j].Line[1] == 'a' && MatLines[j].Line[2] == 'p' && MatLines[j].Line[3] == '_' && MatLines[j].Line[4] == 'D' && MatLines[j].Line[5] == 'i')
-				WaveScan(MatLines[j].Line, "map_Disp", "%s\n", Data->Materials[MaterialCount].NormalTexture);
-			else if (MatLines[j].Line[0] == 'd' && MatLines[j].Line[1] == 'i' && MatLines[j].Line[2] == 's')
-				WaveScan(MatLines[j].Line, "disp", "%s\n", Data->Materials[MaterialCount].HeightTexture);
-			else if (MatLines[j].Line[0] == 'n' && MatLines[j].Line[1] == 'e')
+			if (Line[0] == 'K' && Line[1] == 'a')
+				WaveScan(Line, "Ka", "%f %f %f\n", &Data->Materials[MaterialCount].AmbientColor.x, &Data->Materials[MaterialCount].AmbientColor.y, &Data->Materials[MaterialCount].AmbientColor.z);
+			else if (Line[0] == 'K' && Line[1] == 'd')
+				WaveScan(Line, "Kd", "%f %f %f\n", &Data->Materials[MaterialCount].DiffuseColor.x, &Data->Materials[MaterialCount].DiffuseColor.y, &Data->Materials[MaterialCount].DiffuseColor.z);
+			else if (Line[0] == 'K' && Line[1] == 's')
+				WaveScan(Line, "Ks", "%f %f %f\n", &Data->Materials[MaterialCount].SpecularColor.x, &Data->Materials[MaterialCount].SpecularColor.y, &Data->Materials[MaterialCount].SpecularColor.z);
+			else if (Line[0] == 'N' && Line[1] == 's')
+				WaveScan(Line, "Ns", "%f\n", &Data->Materials[MaterialCount].SpecularExponent);
+			else if (Line[0] == 'd' && Line[1] == ' ')
+				WaveScan(Line, "d", "%f\n", &Data->Materials[MaterialCount].Dissolve);
+			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'K' && Line[5] == 'a' && Line[6] == ' ')
+				WaveScan(Line, "map_Ka", "%s\n", Data->Materials[MaterialCount].AmbientTexture);
+			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'K' && Line[5] == 'd' && Line[6] == ' ')
+				WaveScan(Line, "map_Kd", "%s\n", Data->Materials[MaterialCount].DiffuseTexture);
+			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'K' && Line[5] == 's' && Line[6] == ' ')
+				WaveScan(Line, "map_Ks", "%s\n", Data->Materials[MaterialCount].SpecularTexture);
+			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'd' && Line[5] == ' ')
+				WaveScan(Line, "map_d", "%s\n", Data->Materials[MaterialCount].AlphaTexture);
+			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'B' && Line[5] == 'u')
+				WaveScan(Line, "map_Bump", "%s\n", Data->Materials[MaterialCount].BumpTexture);
+			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'D' && Line[5] == 'i')
+				WaveScan(Line, "map_Disp", "%s\n", Data->Materials[MaterialCount].NormalTexture);
+			else if (Line[0] == 'd' && Line[1] == 'i' && Line[2] == 's')
+				WaveScan(Line, "disp", "%s\n", Data->Materials[MaterialCount].HeightTexture);
+			else if (Line[0] == 'n' && Line[1] == 'e')
 			{
 				MaterialCount++;
 				Data->Materials[MaterialCount] = WaveEmptyMaterial;
-				WaveScan(MatLines[j].Line, "newmtl", "%s\n", Data->Materials[MaterialCount].MaterialName);
+				WaveScan(Line, "newmtl", "%s\n", Data->Materials[MaterialCount].MaterialName);
 
 			}
+
+			Line = WaveGetLine(NULL, &OldBuffer);
 		}
 
 		Data->MaterialCount = MaterialCount + 1;
-
-		for (uint32_t i = 0; i < MatLineCount; i++)
-			free(MatLines[i].Line);
-		free(MatLines);
 	}
 }
 
@@ -441,8 +470,8 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 {
 	WaveModelData Data;
 
-	uint32_t LineCount = 0;
-	WaveLine* Lines = WaveGetLinesFromBuffer(Length, Buffer, &LineCount);
+//	uint32_t LineCount = 0;
+//	WaveLine* Lines = WaveGetLinesFromBuffer(Length, Buffer, &LineCount);
 
 	uint32_t VertexCount = 0;
 	uint32_t VertexTextureCount = 0;
@@ -450,18 +479,22 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 	uint32_t FaceCount = 0;
 	uint32_t MaterialCount = 0;
 
-	for (uint32_t i = 0; i < LineCount; i++)
+	char* OldBuffer;
+	char* Line = WaveGetLine(Buffer, &OldBuffer);
+	while (Line)
 	{
-		if (Lines[i].Line[0] == 'u' && Lines[i].Line[1] == 's')
+		if (Line[0] == 'u' && Line[1] == 's')
 			MaterialCount++;
-		else if (Lines[i].Line[0] == 'v' && Lines[i].Line[1] == ' ')
+		else if (Line[0] == 'v' && Line[1] == ' ')
 			VertexCount++;
-		else if (Lines[i].Line[0] == 'v' && Lines[i].Line[1] == 't')
+		else if (Line[0] == 'v' && Line[1] == 't')
 			VertexTextureCount++;
-		else if (Lines[i].Line[0] == 'v' && Lines[i].Line[1] == 'n')
+		else if (Line[0] == 'v' && Line[1] == 'n')
 			VertexNormalCount++;
-		else if (Lines[i].Line[0] == 'f' && Lines[i].Line[1] == ' ')
+		else if (Line[0] == 'f' && Line[1] == ' ')
 			FaceCount++;
+
+		Line = WaveGetLine(NULL, &OldBuffer);
 	}
 
 	const WaveVec3 NullVec = { 0.0, 0.0, 0.0 };
@@ -488,23 +521,21 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 
 	uint32_t CurrentMaterialIndex = 0;
 
-
-
-
-	for (uint32_t i = 0; i < LineCount; i++)
+	Line = WaveGetLine(Buffer, &OldBuffer);
+	while (Line)
 	{
-		if (Lines[i].Line[0] == 'm' && Lines[i].Line[1] == 't' && (Settings & WAVE_LOAD_MATERIAL))
+		if (Line[0] == 'm' && Line[1] == 't' && (Settings & WAVE_LOAD_MATERIAL))
 		{
 			char MaterialFile[1024];
-			WaveScan(Lines[i].Line, "mtllib", "%[^\r\n]%*c\r\n", MaterialFile);
-
+			WaveScan(Line, "mtllib", "%[^\r\n]%*c\r\n", MaterialFile);
+	
 			WaveLoadMTL(MaterialFile, &Data);
 		}
 
-		if (Lines[i].Line[0] == 'u' && Lines[i].Line[1] == 's' && Data.MaterialCount != 0 && Settings & WAVE_LOAD_MATERIAL)
+		if (Line[0] == 'u' && Line[1] == 's' && Data.MaterialCount != 0 && Settings & WAVE_LOAD_MATERIAL)
 		{
 			char MaterialName[2048];
-			WaveScan(Lines[i].Line, "usemtl", "%s", MaterialName);
+			WaveScan(Line, "usemtl", "%s", MaterialName);
 
 			for (uint32_t j = 0; j < Data.MaterialCount; j++)
 				if (strcmp(Data.Materials[j].MaterialName, MaterialName) == 0)
@@ -514,28 +545,28 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 			Data.MaterialRefrences[Data.MaterialRefrenceCount].MaterialIndex = CurrentMaterialIndex;
 			Data.MaterialRefrenceCount++;
 		}
-		else if (Lines[i].Line[0] == 'v' && Lines[i].Line[1] == ' ')
+		else if (Line[0] == 'v' && Line[1] == ' ')
 		{
-			WaveScan(Lines[i].Line, "v", "%f %f %f\n", &Vertices[VertexCount].x, &Vertices[VertexCount].y, &Vertices[VertexCount].z);
+			WaveScan(Line, "v", "%f %f %f\n", &Vertices[VertexCount].x, &Vertices[VertexCount].y, &Vertices[VertexCount].z);
 			VertexCount++;
 		}
-		else if (Lines[i].Line[0] == 'v' && Lines[i].Line[1] == 't')
+		else if (Line[0] == 'v' && Line[1] == 't')
 		{
-			WaveScan(Lines[i].Line, "vt", "%f %f\n", &VertexTextures[VertexTextureCount].x, &VertexTextures[VertexTextureCount].y);
+			WaveScan(Line, "vt", "%f %f\n", &VertexTextures[VertexTextureCount].x, &VertexTextures[VertexTextureCount].y);
 			VertexTextureCount++;
 		}
-		else if (Lines[i].Line[0] == 'v' && Lines[i].Line[1] == 'n')
+		else if (Line[0] == 'v' && Line[1] == 'n')
 		{
-			WaveScan(Lines[i].Line, "vn", "%f %f %f\n", &VertexNormals[VertexNormalCount].x, &VertexNormals[VertexNormalCount].y, &VertexNormals[VertexNormalCount].z);
+			WaveScan(Line, "vn", "%f %f %f\n", &VertexNormals[VertexNormalCount].x, &VertexNormals[VertexNormalCount].y, &VertexNormals[VertexNormalCount].z);
 			VertexNormalCount++;
 		}
-		else if (Lines[i].Line[0] == 'f' && Lines[i].Line[1] == ' ')
+		else if (Line[0] == 'f' && Line[1] == ' ')
 		{
 			VertexReferenceIndex = 0;
 
-			char* Line = Lines[i].Line + 1;
+		//	char* Line = Line + 1;
 
-			char* TempLine = strtok(Line, " ");
+			char* TempLine = strtok(Line + 1, " ");
 			while (TempLine)
 			{
 				char* StrV = TempLine;
@@ -586,16 +617,17 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 				}
 			}
 		}
+
+		Line = WaveGetLine(NULL, &OldBuffer);
 	}
+
+	
 
 	Data.Vertices = (WaveVertexData*)realloc(Data.Vertices, Data.VertexCount * sizeof(WaveVertexData));
 
 	free(VertexNormals);
 	free(VertexTextures);
 	free(Vertices);
-	for (uint32_t i = 0; i < LineCount; i++)
-		free(Lines[i].Line);
-	free(Lines);
 
 	return Data;
 }

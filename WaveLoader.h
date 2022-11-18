@@ -125,13 +125,15 @@ extern inline WaveVec3 WaveVec3f(float v)
 
 typedef enum
 {
+	WAVE_NONE = 0,
 	WAVE_GEN_UVS = 1,
 	WAVE_GEN_NORMALS = 2,
 	WAVE_FLIP_UVS = 4,
 	WAVE_LOAD_MATERIAL = 8,
 	WAVE_GEN_INDICES = 16,
 	WAVE_GEN_SMOOTH_NORMALS = 32,
-	WAVE_PRINT_DEBUG_INOFS = 64,
+	WAVE_FORCE_GEN_NORMALS = 64,
+	WAVE_PRINT_DEBUG_INOFS = 128,
 	WAVE_MAX = 0xffffffffui32,
 } WaveSettings;
 
@@ -155,34 +157,34 @@ typedef struct
 
 typedef struct
 {
-	uint32_t MaterialIndex;
-	uint32_t VertexIndex;
-} WaveMaterialRefrence;
-
-struct WaveVertexData
-{
-	uint32_t MaterialIndex;
 	uint32_t VertexIndex;
 	uint32_t NewVertexIndex;
+
 	WaveVec3 Vertices;
 	WaveVec3 TexCoords;
 	WaveVec3 Normals;
 	WaveVec3 VertexColor;
-} ;
+} WaveVertexData;
 
 typedef struct
 {
-	uint32_t MaterialCount;
-	WaveModelMaterial* Materials;
-
-	uint32_t MaterialRefrenceCount;
-	WaveMaterialRefrence* MaterialRefrences;
+	uint32_t VertexSize;
+	uint32_t IndexSize;
 
 	uint32_t VertexCount;
 	WaveVertexData* Vertices;
 
 	uint32_t IndexCount;
 	uint32_t* Indices;
+} WaveMeshData;
+
+typedef struct
+{
+	uint32_t MaterialCount;
+	WaveModelMaterial* Materials;
+
+	uint32_t MeshCount;
+	WaveMeshData* Meshes;
 } WaveModelData;
 
 typedef struct
@@ -262,68 +264,110 @@ void WaveGenUVs(WaveVertexData* Vertex)
 	Vertex->TexCoords.y = sinf(sinf(Vertex->Vertices.y / TempUVsqrt));
 }
 
-void WaveGenSmoothNormals(WaveModelData* Data)
+void WaveGenSmoothNormals(WaveModelData* ModelData)
 {
-	if (Data->IndexCount == 0)
-		return;
-
-	for (uint32_t i = 0; i < Data->VertexCount; i++)
+	for (uint32_t j = 0; j < ModelData->MeshCount; j++)
 	{
-		Data->Vertices[i].Normals.x = 0.0;
-		Data->Vertices[i].Normals.y = 0.0;
-		Data->Vertices[i].Normals.z = 0.0;
-	}
+		WaveMeshData* Data = &ModelData->Meshes[j];
 
-	for (uint32_t i = 0; i < Data->IndexCount; i += 3)
-	{
-		WaveVec3* V0 = &Data->Vertices[Data->Indices[i]].Vertices;
-		WaveVec3* V1 = &Data->Vertices[Data->Indices[i + 1]].Vertices;
-		WaveVec3* V2 = &Data->Vertices[Data->Indices[i + 2]].Vertices;
+		if (Data->IndexCount == 0)
+			return;
 
-		WaveVec3 A = WaveSub(*V2, *V1);
-		WaveVec3 B = WaveSub(*V0, *V1);
-		WaveVec3 Normal = WaveCross(A, B);
+		for (uint32_t i = 0; i < Data->VertexCount; i++)
+		{
+			Data->Vertices[i].Normals.x = 0.0;
+			Data->Vertices[i].Normals.y = 0.0;
+			Data->Vertices[i].Normals.z = 0.0;
+		}
 
-		Data->Vertices[Data->Indices[i]].Normals.x += Normal.x;
-		Data->Vertices[Data->Indices[i]].Normals.y += Normal.y;
-		Data->Vertices[Data->Indices[i]].Normals.z += Normal.z;
-											   
-		Data->Vertices[Data->Indices[i + 1]].Normals.x += Normal.x;
-		Data->Vertices[Data->Indices[i + 1]].Normals.y += Normal.y;
-		Data->Vertices[Data->Indices[i + 1]].Normals.z += Normal.z;
-											  
-		Data->Vertices[Data->Indices[i + 2]].Normals.x += Normal.x;
-		Data->Vertices[Data->Indices[i + 2]].Normals.y += Normal.y;
-		Data->Vertices[Data->Indices[i + 2]].Normals.z += Normal.z;
-	}
+		for (uint32_t i = 0; i < Data->IndexCount; i += 3)
+		{
+			WaveVec3* V0 = &Data->Vertices[Data->Indices[i]].Vertices;
+			WaveVec3* V1 = &Data->Vertices[Data->Indices[i + 1]].Vertices;
+			WaveVec3* V2 = &Data->Vertices[Data->Indices[i + 2]].Vertices;
 
-	for (uint32_t i = 0; i < Data->VertexCount; i++)
-		Data->Vertices[i].Normals = WaveNormalize(Data->Vertices[i].Normals);
-}
+			WaveVec3 A = WaveSub(*V2, *V1);
+			WaveVec3 B = WaveSub(*V0, *V1);
+			WaveVec3 Normal = WaveCross(A, B);
 
-void WaveGenNormals(WaveModelData* Data)
-{
-	for (uint32_t i = 0; i < Data->VertexCount; i += 3)
-	{
-		WaveVec3 N = WaveNormalize(WaveCross(WaveSub(Data->Vertices[i + 1].Vertices, Data->Vertices[i].Vertices), WaveSub(Data->Vertices[i + 2].Vertices, Data->Vertices[i].Vertices)));
+			Data->Vertices[Data->Indices[i]].Normals.x += Normal.x;
+			Data->Vertices[Data->Indices[i]].Normals.y += Normal.y;
+			Data->Vertices[Data->Indices[i]].Normals.z += Normal.z;
 
-		Data->Vertices[i].Normals = N;
-		Data->Vertices[i + 1].Normals = N;
-		Data->Vertices[i + 2].Normals = N;
+			Data->Vertices[Data->Indices[i + 1]].Normals.x += Normal.x;
+			Data->Vertices[Data->Indices[i + 1]].Normals.y += Normal.y;
+			Data->Vertices[Data->Indices[i + 1]].Normals.z += Normal.z;
+
+			Data->Vertices[Data->Indices[i + 2]].Normals.x += Normal.x;
+			Data->Vertices[Data->Indices[i + 2]].Normals.y += Normal.y;
+			Data->Vertices[Data->Indices[i + 2]].Normals.z += Normal.z;
+		}
+
+		for (uint32_t i = 0; i < Data->VertexCount; i++)
+			Data->Vertices[i].Normals = WaveNormalize(Data->Vertices[i].Normals);
 	}
 }
 
+void WaveGenNormals(WaveModelData* ModelData)
+{
+	for (uint32_t j = 0; j < ModelData->MeshCount; j++)
+	{
+		WaveMeshData* Data = &ModelData->Meshes[j];
+
+		for (uint32_t i = 0; i < Data->VertexCount - 3; i += 3)
+		{
+			WaveVec3 N = WaveNormalize(WaveCross(WaveSub(Data->Vertices[i + 1].Vertices, Data->Vertices[i].Vertices), WaveSub(Data->Vertices[i + 2].Vertices, Data->Vertices[i].Vertices)));
+
+			Data->Vertices[i].Normals = N;
+			Data->Vertices[i + 1].Normals = N;
+			Data->Vertices[i + 2].Normals = N;
+		}
+	}
+}
+
+#define WAVE_FLOAT_CMP_PRECISION 0.001f
+
+inline char WaveFloatEqual(float f1, float f2)
+{
+	if (((f1 - WAVE_FLOAT_CMP_PRECISION) < f2) &&
+		((f1 + WAVE_FLOAT_CMP_PRECISION) > f2))
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+char WaveCmpWithNormal = 1;
 inline int WaveCompareVertices(WaveVertexData* a, WaveVertexData* b)
 {
-	char* A = (char*)a + 12;
-	char* B = (char*)b + 12;
+	/*
+	if (WaveFloatEqual(a->Vertices.x, b->Vertices.x) &&
+		WaveFloatEqual(a->Vertices.y, b->Vertices.y) &&
+		WaveFloatEqual(a->Vertices.z, b->Vertices.z) &&
+		WaveFloatEqual(a->TexCoords.x, b->TexCoords.x) &&
+		WaveFloatEqual(a->TexCoords.y, b->TexCoords.y))
+		return 0;
 
-	return memcmp(A, B, sizeof(WaveVertexData) - 12 - sizeof(WaveVec3) * 2);
+	if (a->Vertices.x > b->Vertices.x)
+		return 1;
+
+	return -1;
+	*/
+	char* A = (char*)a + 8;
+	char* B = (char*)b + 8;
+	
+	size_t Offset = sizeof(WaveVertexData) - 8 - sizeof(WaveVec3);
+	if (!WaveCmpWithNormal)
+		Offset -= sizeof(WaveVec3);
+
+	return memcmp(A, B, Offset);
 }
 
-int WaveCompareFunc(const void* a, const void* b) 
+int WaveCompareFunc(const void* a, const void* b)
 {
-	
 	return WaveCompareVertices((WaveVertexData*)a, (WaveVertexData*)b);
 }
 
@@ -334,12 +378,14 @@ int WaveCompareFunc1(const void* a, const void* b)
 	return A->VertexIndex - B->VertexIndex;
 }
 
-void WaveRunPPP(WaveModelData* Data, uint32_t Settings)
+void WaveGenIndices(WaveModelData* ModelData)
 {
-	Data->IndexCount = 0;
-
-	if (Settings & WAVE_GEN_INDICES)
+	for (uint32_t k = 0; k < ModelData->MeshCount; k++)
 	{
+		WaveMeshData* Data = &ModelData->Meshes[k];
+
+		Data->IndexCount = 0;
+
 		Data->Indices = (uint32_t*)calloc(Data->VertexCount, sizeof(uint32_t));
 		qsort(Data->Vertices, Data->VertexCount, sizeof(WaveVertexData), WaveCompareFunc);
 
@@ -380,11 +426,26 @@ void WaveRunPPP(WaveModelData* Data, uint32_t Settings)
 		Data->Vertices = NewVertices;
 		Data->Vertices = (WaveVertexData*)realloc(Data->Vertices, Data->VertexCount * sizeof(WaveVertexData));
 	}
-	
-	if (Settings & WAVE_GEN_SMOOTH_NORMALS)
+}
+
+void WaveRunPPP(WaveModelData* ModelData, uint32_t Settings)
+{
+	if (Settings & WAVE_FORCE_GEN_NORMALS)
 	{
-		WaveGenSmoothNormals(Data);
+		WaveCmpWithNormal = 1;
+		WaveGenNormals(ModelData);
 	}
+	else
+		WaveCmpWithNormal = 0;
+	if (!(Settings & WAVE_GEN_SMOOTH_NORMALS))
+		WaveCmpWithNormal = 1;
+
+	if (Settings & WAVE_GEN_INDICES)
+		WaveGenIndices(ModelData);
+
+//	WaveGenNormals(ModelData);
+	if (Settings & WAVE_GEN_SMOOTH_NORMALS)
+		WaveGenSmoothNormals(ModelData);
 }
 
 WaveModelMaterial WaveEmptyMaterial =
@@ -478,12 +539,15 @@ char* WaveGetLine(char* Buffer, char** OldBuffer)
 	return Line;
 }
 
-void WaveLoadMTL(const char* Path, WaveModelData* Data)
+char WaveLoadMTL(const char* Path, WaveModelData* Data)
 {
 	size_t MatLength = 0;
 	char* MatBuffer = WaveLoadFile(Path, &MatLength);
 	if (MatBuffer == NULL || MatLength == 0)
+	{
 		printf("Failed to load material file: %s\n", Path);
+		return 0;
+	}		
 	else
 	{
 		int32_t MaterialCount = 0;
@@ -541,6 +605,8 @@ void WaveLoadMTL(const char* Path, WaveModelData* Data)
 
 		Data->MaterialCount = MaterialCount + 1;
 	}
+
+	return 1;
 }
 
 WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
@@ -581,10 +647,6 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 
 	Data.Materials = &WaveEmptyMaterial;
 	Data.MaterialCount = 0;
-	Data.MaterialRefrenceCount = 0;
-	Data.MaterialRefrences = (WaveMaterialRefrence*)calloc(MaterialCount, sizeof(WaveMaterialRefrence));
-	Data.Vertices = (WaveVertexData*)calloc(FaceCount * 4 * 2, sizeof(WaveVertexData));
-	Data.VertexCount = 0;
 
 	VertexCount = 0;
 	VertexTextureCount = 0;
@@ -598,6 +660,8 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 
 	uint32_t CurrentMaterialIndex = 0;
 
+	WaveMeshData* Mesh = NULL;
+
 	Line = WaveGetLine(Buffer, &OldBuffer);
 	while (Line)
 	{
@@ -606,7 +670,27 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 			char MaterialFile[1024];
 			WaveScan(Line, "mtllib", "%[^\r\n]%*c\r\n", MaterialFile);
 
-			WaveLoadMTL(MaterialFile, &Data);
+			if (WaveLoadMTL(MaterialFile, &Data))
+			{
+				Data.MeshCount = Data.MaterialCount;
+				Data.Meshes = (WaveMeshData*)malloc(Data.MeshCount * sizeof(WaveMeshData));
+
+				for (uint32_t i = 0; i < Data.MeshCount; i++)
+				{
+					Data.Meshes[i].VertexSize = FaceCount * 3;
+					Data.Meshes[i].Vertices = (WaveVertexData*)calloc(Data.Meshes[i].VertexSize, sizeof(WaveVertexData));
+					Data.Meshes[i].VertexCount = 0;
+				}
+			}	
+			else
+			{
+				Data.MeshCount = 1;
+				Data.Meshes = (WaveMeshData*)malloc(Data.MeshCount * sizeof(WaveMeshData));
+				Data.Meshes[0].VertexSize = FaceCount * 4 * 2;
+				Data.Meshes[0].Vertices = (WaveVertexData*)calloc(Data.Meshes[0].VertexSize, sizeof(WaveVertexData));
+				Data.Meshes[0].VertexCount = 0;
+				Mesh = &Data.Meshes[0];
+			}
 		}
 
 		if (Line[0] == 'u' && Line[1] == 's' && Data.MaterialCount != 0 && Settings & WAVE_LOAD_MATERIAL)
@@ -618,9 +702,7 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 				if (strcmp(Data.Materials[j].MaterialName, MaterialName) == 0)
 					CurrentMaterialIndex = j;
 
-			Data.MaterialRefrences[Data.MaterialRefrenceCount].VertexIndex = Data.VertexCount;
-			Data.MaterialRefrences[Data.MaterialRefrenceCount].MaterialIndex = CurrentMaterialIndex;
-			Data.MaterialRefrenceCount++;
+			Mesh = &Data.Meshes[CurrentMaterialIndex];
 		}
 		else if (Line[0] == 'v' && Line[1] == ' ')
 		{
@@ -679,24 +761,26 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 				{
 					WaveVertexData Vertex;
 
-				//	if (Data.VertexCount >= FaceCount * 4 * 2)
-				//		printf("Fuck\n");
+					if (Mesh->VertexCount + 1 >= Mesh->VertexSize)
+					{
+						Mesh->VertexSize += FaceCount * 3;
+						Mesh->Vertices = (WaveVertexData*)realloc(Mesh->Vertices, Mesh->VertexSize * sizeof(WaveVertexData));
+					}						
 
-					Vertex.VertexIndex = Data.VertexCount;
+					Vertex.VertexIndex = Mesh->VertexCount;
 					Vertex.Vertices = Vertices[p[j]->V - 1];
 					Vertex.TexCoords = p[j]->VT != 0 ? VertexTextures[p[j]->VT - 1] : NullVec;
 					Vertex.Normals = p[j]->VN != 0 ? VertexNormals[p[j]->VN - 1] : NullVec;
 					Vertex.VertexColor.x = 1.0;
 					Vertex.VertexColor.y = 1.0;
 					Vertex.VertexColor.z = 1.0;
-					Vertex.MaterialIndex = CurrentMaterialIndex;
 
 					if ((Settings & WAVE_GEN_UVS) && p[j]->VT == 0)
 						WaveGenUVs(&Vertex);
 					if ((Settings & WAVE_GEN_NORMALS) && p[j]->VN == 0)
 						Vertex.Normals = FaceNormal;
 
-					Data.Vertices[Data.VertexCount++] = Vertex;
+					Mesh->Vertices[Mesh->VertexCount++] = Vertex;
 				}
 			}
 		}
@@ -708,7 +792,11 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 	free(VertexTextures);
 	free(Vertices);
 
-	Data.Vertices = (WaveVertexData*)realloc(Data.Vertices, Data.VertexCount * sizeof(WaveVertexData));
+	for (uint32_t i = 0; i < Data.MeshCount; i++)
+	{
+		Data.Meshes[i].VertexSize = Data.Meshes[i].VertexCount;
+		Data.Meshes[i].Vertices = (WaveVertexData*)realloc(Data.Meshes[i].Vertices, Data.Meshes[i].VertexCount * sizeof(WaveVertexData));
+	}
 
 	return Data;
 }
@@ -741,46 +829,49 @@ WaveModelData WaveLoadSTL(size_t Length, char* Buffer, uint32_t Settings)
 
 	uint32_t VertexCount = Description->Triangles * 3;
 
-	WaveModelData Data;
-	Data.MaterialCount = 0;
-	Data.Materials = &WaveEmptyMaterial;
-	Data.MaterialRefrenceCount = 0;
-	Data.MaterialRefrences = NULL;
-	Data.Vertices = (WaveVertexData*)calloc(VertexCount, sizeof(WaveVertexData));
-	Data.VertexCount = VertexCount;
+	WaveModelData ModelData;
+	ModelData.MaterialCount = 0;
+	ModelData.Materials = &WaveEmptyMaterial;
+	ModelData.MeshCount = 1;
+	ModelData.Meshes = (WaveMeshData*)malloc(ModelData.MeshCount * sizeof(WaveMeshData));
+	ModelData.Meshes[0].VertexSize = VertexCount;
+	ModelData.Meshes[0].Vertices = (WaveVertexData*)calloc(VertexCount, sizeof(WaveVertexData));
+	ModelData.Meshes[0].VertexCount = VertexCount;
 
 	WaveVec3 DefaultColor = { 1.0, 1.0, 1.0 };
 
+	WaveVertexData* Vertices = ModelData.Meshes[0].Vertices;
+
 	uint32_t j = 0;
 	for (uint32_t i = 0; i < Description->Triangles; i++)
-	{
-		Data.Vertices[j].VertexIndex = j;
-		Data.Vertices[j + 1].VertexIndex = j + 1;
-		Data.Vertices[j + 2].VertexIndex = j + 2;
-
-		Data.Vertices[j].Vertices = VertexArray[i].Vertex1;
-		Data.Vertices[j + 1].Vertices = VertexArray[i].Vertex2;
-		Data.Vertices[j + 2].Vertices = VertexArray[i].Vertex3;
-
-		Data.Vertices[j].Normals = VertexArray[i].Normal;
-		Data.Vertices[j + 1].Normals = VertexArray[i].Normal;
-		Data.Vertices[j + 2].Normals = VertexArray[i].Normal;
-
-		Data.Vertices[j].VertexColor = DefaultColor;
-		Data.Vertices[j + 1].VertexColor = DefaultColor;
-		Data.Vertices[j + 2].VertexColor = DefaultColor;
+	{		
+		Vertices[j].VertexIndex = j;
+		Vertices[j + 1].VertexIndex = j + 1;
+		Vertices[j + 2].VertexIndex = j + 2;
+		
+		Vertices[j].Vertices = VertexArray[i].Vertex1;
+		Vertices[j + 1].Vertices = VertexArray[i].Vertex2;
+		Vertices[j + 2].Vertices = VertexArray[i].Vertex3;
+		
+		Vertices[j].Normals = VertexArray[i].Normal;
+		Vertices[j + 1].Normals = VertexArray[i].Normal;
+		Vertices[j + 2].Normals = VertexArray[i].Normal;
+		
+		Vertices[j].VertexColor = DefaultColor;
+		Vertices[j + 1].VertexColor = DefaultColor;
+		Vertices[j + 2].VertexColor = DefaultColor;
 
 		if (Settings & WAVE_GEN_UVS)
 		{
-			WaveGenUVs(&Data.Vertices[j]);
-			WaveGenUVs(&Data.Vertices[j + 1]);
-			WaveGenUVs(&Data.Vertices[j + 2]);
+			WaveGenUVs(&Vertices[j]);
+			WaveGenUVs(&Vertices[j + 1]);
+			WaveGenUVs(&Vertices[j + 2]);
 		}
 
 		j += 3;
 	}
 
-	return Data;
+	return ModelData;
 }
 
 typedef struct
@@ -1055,14 +1146,17 @@ WaveMeshDAE* WaveGetGeometry(uint32_t* MeshCount, WaveNode* Geometry, char* Buff
 	return Meshes;
 }
 
-void WaveProccesMeshData(uint32_t MeshCount, WaveMeshDAE* Meshes, WaveModelData* Data, uint32_t Settings)
+void WaveProccesMeshData(uint32_t MeshCount, WaveMeshDAE* Meshes, WaveModelData* ModelData, uint32_t Settings)
 {
+	WaveMeshData* Data = &ModelData->Meshes[0];
+
 	uint32_t VertexReferenceIndex = 0;
 	WaveVertexReference VertexReferences[4];
 
 	for (uint32_t i = 0; i < MeshCount; i++)
 		Data->VertexCount += (Meshes[i].MeshData[0].FloatCount / Meshes[i].ArrayCount) * Meshes[i].Polygon;
 
+	Data->VertexSize = Data->VertexCount;
 	Data->Vertices = (WaveVertexData*)calloc(Data->VertexCount, sizeof(WaveVertexData));
 	Data->VertexCount = 0;
 
@@ -1148,8 +1242,6 @@ void WaveProccesMeshData(uint32_t MeshCount, WaveMeshDAE* Meshes, WaveModelData*
 					Data->Vertices[Data->VertexCount].VertexColor.y = 1.0;
 					Data->Vertices[Data->VertexCount].VertexColor.z = 1.0;
 
-					Data->Vertices[Data->VertexCount].MaterialIndex = 0;
-
 					//	if ((Settings & WAVE_GEN_UVS) && !Mesh.UseTextCoords)
 					//		WaveGenUVs(Data, Data->VertexCount);
 					//	if ((Settings & WAVE_GEN_NORMALS) && !Mesh.UseNormals)
@@ -1167,19 +1259,18 @@ void WaveProccesMeshData(uint32_t MeshCount, WaveMeshDAE* Meshes, WaveModelData*
 
 WaveModelData WaveLoadDAE(size_t Length, char* Buffer, uint32_t Settings)
 {
-	WaveModelData Data;
-	Data.MaterialCount = 0;
-	Data.Materials = &WaveEmptyMaterial;
-	Data.MaterialRefrenceCount = 0;
-	Data.MaterialRefrences = NULL;
-	Data.Vertices = NULL;
-	Data.VertexCount = 0;
+	WaveModelData ModelData;
+	ModelData.MaterialCount = 0;
+	ModelData.Materials = &WaveEmptyMaterial;
+	ModelData.MeshCount = 1;
+	ModelData.Meshes = (WaveMeshData*)malloc(ModelData.MeshCount * sizeof(WaveMeshData));
+	
 
 	WaveNode Geometry = WaveGetNode("<library_geometries>", "</library_geometries>", 0, Length, Buffer);
 	uint32_t MeshCount = 0;
 	WaveMeshDAE* Meshes = WaveGetGeometry(&MeshCount, &Geometry, Buffer);
 
-	WaveProccesMeshData(MeshCount, Meshes, &Data, Settings);
+	WaveProccesMeshData(MeshCount, Meshes, &ModelData, Settings);
 	printf("MeshCount: %d\n", MeshCount);
 	free(Meshes);
 
@@ -1194,7 +1285,7 @@ WaveModelData WaveLoadDAE(size_t Length, char* Buffer, uint32_t Settings)
 	//		printf("\n");
 	//	}
 
-	return Data;
+	return ModelData;
 }
 
 extern inline WaveModelData WaveLoadModel(const char* Path, uint32_t Settings)
@@ -1215,8 +1306,8 @@ extern inline WaveModelData WaveLoadModel(const char* Path, uint32_t Settings)
 
 		ModelData.MaterialCount = 0;
 		ModelData.Materials = NULL;
-		ModelData.VertexCount = 0;
-		ModelData.Vertices = NULL;
+		ModelData.MeshCount = 0;
+		ModelData.Meshes = NULL;
 		return ModelData;
 	}
 
@@ -1242,8 +1333,8 @@ extern inline WaveModelData WaveLoadModel(const char* Path, uint32_t Settings)
 
 		printf("Finished post processing pipeline\n");
 
-		printf("Vertices: %d\n", ModelData.VertexCount);
-		printf("Indices: %d\n\n", ModelData.IndexCount);
+	//	printf("Vertices: %d\n", ModelData.VertexCount);
+	//	printf("Indices: %d\n\n", ModelData.IndexCount);
 	}
 	else
 		WaveRunPPP(&ModelData, Settings);
@@ -1256,9 +1347,16 @@ extern inline void WaveFreeModel(WaveModelData* ModelData)
 {
 	if (ModelData->MaterialCount > 0)
 		free(ModelData->Materials);
-	if (ModelData->MaterialRefrenceCount > 0)
-		free(ModelData->MaterialRefrences);
-	free(ModelData->Vertices);
-	if (ModelData->IndexCount > 0)
-		free(ModelData->Indices);
+
+	for (uint32_t i = 0; i < ModelData->MeshCount; i++)
+	{
+		WaveMeshData* Mesh = &ModelData->Meshes[i];
+		free(Mesh->Vertices);
+		if (Mesh->IndexCount > 0)
+			free(Mesh->Indices);
+	}
+	free(ModelData->Meshes);
+//	free(ModelData->Vertices);
+//	if (ModelData->IndexCount > 0)
+//		free(ModelData->Indices);
 }

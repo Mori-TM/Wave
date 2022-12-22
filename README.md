@@ -19,7 +19,7 @@ vec3 B = { 11.0, 2.0, 1.0 };
 vec3 Res = Add3(A, B);
 
 ```
-WaveLoader is a basic C && C++ OBJ, STL and Dae Loader it can Load Models with their Material or VertexColors.
+WaveLoader is a basic C && C++ OBJ, STL, (gltf in future) Loader it can Load Models with their Material or VertexColors.
 ```C
 WaveModelData ModelData = WaveLoadModel("Vulkan.obj/stl", WAVE_LOAD_MATERIAL | WAVE_GEN_NORMALS | WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_INDICES | WAVE_REMOVE_REDUNDANT_MATERIALS);
 

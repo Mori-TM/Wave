@@ -11,7 +11,7 @@ Model = TranslateMat4(Model, 1.0, 0.0, 0.0);
 
 mat4 Proj;
 float Aspect = (float)Width / Height;
-Proj = PerspectivMatrix(Aspect, 75.0, 0.01, 10000.0);
+Proj = PerspectiveMat4(Aspect, 75.0, 0.01, 10000.0);
 
 vec3 A = { 0.0, 0.0, 1.0 };
 vec3 B = { 11.0, 2.0, 1.0 };
@@ -21,49 +21,30 @@ vec3 Res = Add3(A, B);
 ```
 WaveLoader is a basic C && C++ OBJ, STL and Dae Loader it can Load Models with their Material or VertexColors.
 ```C
-WaveModelData ModelData = WaveLoadOBJ("Vulkan.obj", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
-              ModelData = WaveLoadSTL("Vulkan.stl", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
-              //No Material Loading just Vertex Colors
-              ModelData = WaveLoadDAE("Vulkan.dae", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
-              //Or use
-              ModelData = WaveLoadModel("Vulkan.(dae/obj/stl)", WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_NORMALS | WAVE_LOAD_MATERIAL);
+WaveModelData ModelData = WaveLoadModel("Vulkan.obj/stl", WAVE_LOAD_MATERIAL | WAVE_GEN_NORMALS | WAVE_FLIP_UVS | WAVE_GEN_UVS | WAVE_GEN_INDICES | WAVE_REMOVE_REDUNDANT_MATERIALS);
 
-int MaterialIndex = 0;
-
-for (int i = 0; i < ModelData->Mesh->VerticeCount; i++)
+for (uint32_t i = 0; i < ModelData->MeshCount; i++)
 {
-  Vertices.Pos.x = ModelData.Mesh[i].Vertices.x;
-  Vertices.Pos.y = ModelData.Mesh[i].Vertices.y;
-  Vertices.Pos.z = ModelData.Mesh[i].Vertices.z;
-
-  Vertices.TexCoord.x = ModelData.Mesh[i].TexCoords.x;
-  Vertices.TexCoord.y = ModelData.Mesh[i].TexCoords.y;
-
-  Vertices.Normal.x = ModelData.Mesh[i].Normals.x;
-  Vertices.Normal.y = ModelData.Mesh[i].Normals.y;
-  Vertices.Normal.z = ModelData.Mesh[i].Normals.z;
-  
-  	//check if Model Has Material
-	if (ModelData->HasMaterial == 1)
+	WaveMeshData* WaveMesh = &ModelData->Meshes[i];
+	char* DiffuseTexturePath = ModelData->Materials[i].DiffuseTexture;
+	
+	for (uint32_t j = 0; j < WaveMesh->VertexCount; j++)
 	{
-		if (ModelData->Material[MaterialIndex].VertexIndex == i)
-			MaterialIndex++;
-
-		Vertices.Vertex.AmbientColor.x = ModelData->Material[MaterialIndex-1].AmbientColor.x;
-		Vertices.Vertex.AmbientColor.y = ModelData->Material[MaterialIndex-1].AmbientColor.y;
-		Vertices.Vertex.AmbientColor.z = ModelData->Material[MaterialIndex-1].AmbientColor.z;
-
-		Vertices.Vertex.DiffuseColor.x = ModelData->Material[MaterialIndex-1].DiffuseColor.x;
-		Vertices.Vertex.DiffuseColor.y = ModelData->Material[MaterialIndex-1].DiffuseColor.y;
-		Vertices.Vertex.DiffuseColor.z = ModelData->Material[MaterialIndex-1].DiffuseColor.z;
+		NewVertices[j].Pos.x = WaveMesh->Vertices[j].Vertices.x;
+		NewVertices[j].Pos.y = WaveMesh->Vertices[j].Vertices.y;
+		NewVertices[j].Pos.z = WaveMesh->Vertices[j].Vertices.z;
+		NewVertices[j].Normal.x = WaveMesh->Vertices[j].Normals.x;
+		NewVertices[j].Normal.y = WaveMesh->Vertices[j].Normals.y;
+		NewVertices[j].Normal.z = WaveMesh->Vertices[j].Normals.z;
+		NewVertices[j].TexCoord.x = WaveMesh->Vertices[j].TexCoords.x;
+		NewVertices[j].TexCoord.y = WaveMesh->Vertices[j].TexCoords.y;
 	}
-	else
+	
+	for (uint32_t j = 0; j < WaveMesh->IndexCount; j++)
 	{
-		Vertices.Vertex.Color.x = ModelData->Mesh[i].VertexColor.x;
-		Vertices.Vertex.Color.y = ModelData->Mesh[i].VertexColor.y;
-		Vertices.Vertex.Color.z = ModelData->Mesh[i].VertexColor.z;
-	}
-}	
+		NewIndices[i] = WaveMesh->Indices[i];
+	}		
+}
 
 WaveFreeModel(&ModelData);
 ```

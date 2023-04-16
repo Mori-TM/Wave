@@ -6,7 +6,13 @@
 #define WAVE_MAX_LENGTH 4096
 
 #ifdef _WIN32
+#pragma comment(lib, "dsound.lib")
+#pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "winmm.lib")
+
 #include <Windows.h>
+#include <mmsystem.h>
+#include <dsound.h>
 #include <psapi.h>
 #include <Commdlg.h>
 HWND WaveHwnd = NULL;
@@ -53,7 +59,7 @@ int32_t WaveOpenFileDialog(char* Path, int MultiSelect, unsigned short* Offset, 
 	WCHAR WinPath[WAVE_MAX_LENGTH];
 	OFN.lpstrFile = WinPath;
 	OFN.lpstrFilter = WaveToLPWSTR(FileExtensions);
-	wprintf(OFN.lpstrFilter);
+//	wprintf(OFN.lpstrFilter);
 #else
 	OFN.lpstrFile = Path;
 	OFN.lpstrFilter = FileExtensions;
@@ -125,28 +131,6 @@ int32_t WaveSaveFileDialog(char* Path, const char* FileExtensions)
 	char* Out = WaveToChar(WinPath);
 	strcpy(Path, Out);
 #endif 
-	/*
-
-	OPENFILENAME ofn;
-
-	ZeroMemory(&ofn, sizeof(OPENFILENAME));
-	
-	WCHAR WinPath[WAVE_MAX_LENGTH];
-	ofn.lStructSize = sizeof(OPENFILENAME);
-	ofn.hwndOwner = WaveHwnd;
-	ofn.lpstrFile = WinPath;
-	ofn.lpstrFile[0] = '\0';
-	ofn.nMaxFile = 1000;
-	ofn.lpstrFilter = WaveToLPWSTR(FileExtensions);
-	ofn.nFilterIndex = 1;
-	
-	GetCurrentDirectory(WAVE_MAX_LENGTH, WaveToLPWSTR(LastPath));
-	int32_t Ret = GetSaveFileName(&ofn);
-//	SetCurrentDirectory(CurrentPath);
-
-	char* Out = WaveToChar(WinPath);
-	strcpy(Path, Out);
-	*/
 	return Ret;
 }
 
@@ -169,13 +153,29 @@ void WaveSetPath(char* Path)
 	SetCurrentDirectory(WaveToLPWSTR(Path));
 
 #else
-	printf("Path: %s\n", Path);
 	SetCurrentDirectory(Path);
 #endif 
+}
+
+void WaveGetPath(char* OutPath)
+{
+#ifdef UNICODE
+	WCHAR Path[WAVE_MAX_LENGTH];
+	GetCurrentDirectory(WAVE_MAX_LENGTH, LastPath);
+	strcpy(OutPath, WaveToChar(Path));
+#else
+	GetCurrentDirectory(WAVE_MAX_LENGTH, OutPath);
+#endif 
+}
+
+void WavePlayAudio()
+{
 	
 }
 
 #elif __linux__
+char LastPath[WAVE_MAX_LENGTH];
+
 int32_t WaveOpenFileDialog(char* Path, int MultiSelect, unsigned short* Offset, const char* FileExtensions)
 {
 	const char ZenityPath[] = "/usr/bin/zenity";
@@ -216,10 +216,31 @@ size_t WaveGetUsedMemory()
 	return (size_t)Mem * (size_t)sysconf(_SC_PAGESIZE);
 }
 
+void WaveResetToLastPath()
+{
+	
+}
+
+void WaveSetPath(char* Path)
+{
+
+}
 #elif __APPLE__
 #include <unistd.h>
 #include <sys/resource.h>
 #include <mach/mach.h>
+
+char LastPath[WAVE_MAX_LENGTH];
+
+int32_t WaveOpenFileDialog(char* Path, int MultiSelect, unsigned short* Offset, const char* FileExtensions)
+{
+	
+}
+
+int32_t WaveSaveFileDialog(char* Path, const char* FileExtensions)
+{
+
+}
 
 size_t WaveGetUsedMemory()
 {
@@ -230,6 +251,16 @@ size_t WaveGetUsedMemory()
 		return (size_t)0L;
 
 	return (size_t)Info.resident_size;
+}
+
+void WaveResetToLastPath()
+{
+
+}
+
+void WaveSetPath(char* Path)
+{
+
 }
 
 #endif

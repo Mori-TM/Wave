@@ -4,8 +4,21 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <float.h>
 #include <math.h>
+#ifndef WAVE_NO_MULTI_THREDED_LOADING
+#if _HAS_CXX23
+#include <stdatomic.h>
+atomic_int WaveLoadingStatus;
+#else
+int WaveLoadingStatus;
+#endif
+#else
+int WaveLoadingStatus;
+#endif // WAVE_NO_MULTI_THREDED_LOADING
+
+#define WAVE_MAX_ALLOCATION_SIZE 388608
 
 #ifndef WAVE_BASIC_MATH
 #define WAVE_BASIC_MATH
@@ -134,9 +147,26 @@ typedef enum
 	WAVE_GEN_SMOOTH_NORMALS = 32,
 	WAVE_FORCE_GEN_NORMALS = 64,
 	WAVE_REMOVE_REDUNDANT_MATERIALS = 128,
-	WAVE_PRINT_DEBUG_INOFS = 256,
+	WAVE_MATERIAL_USE_MODEL_PATH = 256,
+	WAVE_PRINT_DEBUG_INOFS = 512,
 	WAVE_MAX = 0xffffffffui32,
 } WaveSettings;
+
+typedef enum
+{
+	WAVE_STATUS_OPENED = 1,
+	WAVE_STATUS_CLOSED = 2,
+	WAVE_STATUS_START_PPP = 3,
+	WAVE_STATUS_GEN_NORMALS = 4,
+	WAVE_STATUS_GEN_SMOOTH_NORMALS = 5,
+	WAVE_STATUS_GEN_INDICES = 6,
+	WAVE_STATUS_REMOVE_REDUDANT_MATERIALS = 7,
+	WAVE_STATUS_PARSE_MODEL = 8,
+	WAVE_STATUS_PARSE_MATERIAL = 9,
+	WAVE_STATUS_ALLOCATE_VERTICES = 10,
+	WAVE_STATUS_REDUCE_SIZE = 11,
+	WAVE_STATUS_FINISHED = 12,
+} WaveLoadingStatusOptions;
 
 typedef struct
 {
@@ -147,13 +177,23 @@ typedef struct
 	WaveVec3 SpecularColor;
 	float SpecularExponent;
 	float Dissolve;
+	float Emissive;
 	char AmbientTexture[4096];
 	char DiffuseTexture[4096];
 	char SpecularTexture[4096];
+	char EmissiveTexture[4096];
 	char AlphaTexture[4096];
 	char BumpTexture[4096];
-	char NormalTexture[4096];
+	char DisplacmentTexture[4096];
 	char HeightTexture[4096];
+	//PBR-Extension
+	float Roughness;
+	float Metallic;
+	float Sheen;
+	char RoughnessTexture[4096];
+	char MetallicTexture[4096];
+	char SheenTexture[4096];
+	char NormalTexture[4096];
 } WaveModelMaterial;
 
 typedef struct
@@ -169,6 +209,12 @@ typedef struct
 
 typedef struct
 {
+	WaveVec3 Min;
+	WaveVec3 Max;
+} WaveAABBData;
+
+typedef struct
+{
 	uint32_t VertexSize;
 	uint32_t IndexSize;
 
@@ -179,6 +225,8 @@ typedef struct
 
 	uint32_t IndexCount;
 	uint32_t* Indices;
+
+	WaveAABBData AABB;
 } WaveMeshData;
 
 typedef struct
@@ -269,6 +317,7 @@ void WaveGenUVs(WaveVertexData* Vertex)
 
 void WaveGenSmoothNormals(WaveModelData* ModelData)
 {
+	WaveLoadingStatus = WAVE_STATUS_GEN_SMOOTH_NORMALS;
 	for (uint32_t j = 0; j < ModelData->MeshCount; j++)
 	{
 		WaveMeshData* Data = &ModelData->Meshes[j];
@@ -313,6 +362,7 @@ void WaveGenSmoothNormals(WaveModelData* ModelData)
 
 void WaveGenNormals(WaveModelData* ModelData)
 {
+	WaveLoadingStatus = WAVE_STATUS_GEN_NORMALS;
 	for (uint32_t j = 0; j < ModelData->MeshCount; j++)
 	{
 		WaveMeshData* Data = &ModelData->Meshes[j];
@@ -383,6 +433,7 @@ int WaveCompareFunc1(const void* a, const void* b)
 
 void WaveGenIndices(WaveModelData* ModelData)
 {
+	WaveLoadingStatus = WAVE_STATUS_GEN_INDICES;
 	for (uint32_t k = 0; k < ModelData->MeshCount; k++)
 	{
 		WaveMeshData* Data = &ModelData->Meshes[k];
@@ -478,6 +529,7 @@ void WaveCombineMeshes(WaveMeshData* A, WaveMeshData* B, WaveMeshData* Dst)
 
 void WaveRemoveRedundantMaterials(WaveModelData* ModelData)
 {
+	WaveLoadingStatus = WAVE_STATUS_REMOVE_REDUDANT_MATERIALS;
 	qsort(ModelData->Meshes, ModelData->MeshCount, sizeof(WaveMeshData), WaveCompareMeshMaterials);
 
 	for (uint32_t i = 0; i < ModelData->MeshCount; i++)
@@ -591,10 +643,32 @@ void WaveRemoveRedundantMaterials(WaveModelData* ModelData)
 //	qsort(ModelData->Materials, ModelData->MaterialCount, sizeof(WaveModelMaterial), WaveCompareMaterials);
 }
 
+void WaveGenAABBs(WaveModelData* ModelData)
+{
+	for (uint32_t i = 0; i < ModelData->MeshCount; i++)
+	{
+		WaveMeshData* Data = &ModelData->Meshes[i];
+
+		Data->AABB.Min = Data->Vertices[0].Vertices;
+		Data->AABB.Max = Data->Vertices[0].Vertices;
+		for (uint32_t i = 1; i < Data->VertexCount; i++)
+		{
+			if (Data->Vertices[i].Vertices.x > Data->AABB.Max.x) Data->AABB.Max.x = Data->Vertices[i].Vertices.x;
+			if (Data->Vertices[i].Vertices.y > Data->AABB.Max.y) Data->AABB.Max.y = Data->Vertices[i].Vertices.y;
+			if (Data->Vertices[i].Vertices.z > Data->AABB.Max.z) Data->AABB.Max.z = Data->Vertices[i].Vertices.z;
+
+			if (Data->Vertices[i].Vertices.x < Data->AABB.Min.x) Data->AABB.Min.x = Data->Vertices[i].Vertices.x;
+			if (Data->Vertices[i].Vertices.y < Data->AABB.Min.y) Data->AABB.Min.y = Data->Vertices[i].Vertices.y;
+			if (Data->Vertices[i].Vertices.z < Data->AABB.Min.z) Data->AABB.Min.z = Data->Vertices[i].Vertices.z;
+		}
+	}
+}
+
 void WaveRunPPP(WaveModelData* ModelData, uint32_t Settings)
 {
 	if (Settings & WAVE_FORCE_GEN_NORMALS)
 	{
+		WaveLoadingStatus = WAVE_STATUS_GEN_NORMALS;
 		WaveCmpWithNormal = 1;
 		WaveGenNormals(ModelData);
 	}
@@ -611,6 +685,8 @@ void WaveRunPPP(WaveModelData* ModelData, uint32_t Settings)
 
 	if (Settings & WAVE_GEN_SMOOTH_NORMALS)
 		WaveGenSmoothNormals(ModelData);
+
+	WaveGenAABBs(ModelData);
 }
 
 WaveModelMaterial WaveEmptyMaterial =
@@ -621,9 +697,18 @@ WaveModelMaterial WaveEmptyMaterial =
 	{ 1.0, 1.0, 1.0 },
 	1.0,
 	1.0,
+	1.0,
 	"NoTexture",
 	"NoTexture",
 	"NoTexture",
+	"NoTexture",
+	"NoTexture",
+	"NoTexture",
+	"NoTexture",
+	"NoTexture",
+	1.0,
+	0.0,
+	1.0,
 	"NoTexture",
 	"NoTexture",
 	"NoTexture",
@@ -704,13 +789,50 @@ char* WaveGetLine(char* Buffer, char** OldBuffer)
 	return Line;
 }
 
-char WaveLoadMTL(const char* Path, WaveModelData* Data)
+char WaveLineEqual(char* Line, const char* Str)
 {
+	size_t Length = strlen(Str);
+
+	for (size_t i = 0; i < Length; i++)
+		if (tolower(Line[i]) != tolower(Str[i]))
+			return 0;
+
+	return 1;
+}
+
+//use memset 0
+void WaveCombinePath(const char* Path, const char* FileName, char* PathCombined)
+{
+	strcpy(PathCombined, Path);
+	char* PC = PathCombined;
+	memcpy(PC + strlen(PathCombined), FileName, strlen(FileName));
+}
+
+void WaveCombinePathDst(const char* Path, char* DstFileName)
+{
+	char PathCombined[4096];
+	memset(PathCombined, 0, 4096);
+	WaveCombinePath(Path, DstFileName, PathCombined);
+	strcpy(DstFileName, PathCombined);
+}
+
+char WaveLoadMTL(const char* FilePath, const char* FileName, WaveModelData* Data, uint32_t Settings)
+{
+	char PathCombined[2048];
+	memset(PathCombined, 0, 2048);
+
+	if (strstr(FileName, "/") ||
+		strstr(FileName, "\\") ||
+		!(Settings & WAVE_MATERIAL_USE_MODEL_PATH))
+		strcpy(PathCombined, FileName);
+	else 
+		WaveCombinePath(FilePath, FileName, PathCombined);
+
 	size_t MatLength = 0;
-	char* MatBuffer = WaveLoadFile(Path, &MatLength);
+	char* MatBuffer = WaveLoadFile(PathCombined, &MatLength);
 	if (MatBuffer == NULL || MatLength == 0)
 	{
-		printf("Failed to load material file: %s\n", Path);
+		printf("Failed to load material file: %s\n", PathCombined);
 		return 0;
 	}		
 	else
@@ -727,54 +849,75 @@ char WaveLoadMTL(const char* Path, WaveModelData* Data)
 			Line = WaveGetLine(NULL, &OldBuffer);
 		}
 
+		if (MaterialCount == 0)
+			return 0;
+
 		Data->Materials = (WaveModelMaterial*)calloc(MaterialCount, sizeof(WaveModelMaterial));
-		MaterialCount = -1;
+		MaterialCount = 0;
+
+		WaveModelMaterial* CurMaterial = &Data->Materials[0];
 
 		Line = WaveGetLine(MatBuffer, &OldBuffer);
 		while (Line)
 		{
-			if (Line[0] == 'K' && Line[1] == 'a')
-				WaveScan(Line, "Ka", "%f %f %f\n", &Data->Materials[MaterialCount].AmbientColor.x, &Data->Materials[MaterialCount].AmbientColor.y, &Data->Materials[MaterialCount].AmbientColor.z);
-			else if (Line[0] == 'K' && Line[1] == 'd')
-				WaveScan(Line, "Kd", "%f %f %f\n", &Data->Materials[MaterialCount].DiffuseColor.x, &Data->Materials[MaterialCount].DiffuseColor.y, &Data->Materials[MaterialCount].DiffuseColor.z);
-			else if (Line[0] == 'K' && Line[1] == 's')
-				WaveScan(Line, "Ks", "%f %f %f\n", &Data->Materials[MaterialCount].SpecularColor.x, &Data->Materials[MaterialCount].SpecularColor.y, &Data->Materials[MaterialCount].SpecularColor.z);
-			else if (Line[0] == 'N' && Line[1] == 's')
-				WaveScan(Line, "Ns", "%f\n", &Data->Materials[MaterialCount].SpecularExponent);
-			else if (Line[0] == 'd' && Line[1] == ' ')
-				WaveScan(Line, "d", "%f\n", &Data->Materials[MaterialCount].Dissolve);
-			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'K' && Line[5] == 'a' && Line[6] == ' ')
-				WaveScan(Line, "map_Ka", "%s\n", Data->Materials[MaterialCount].AmbientTexture);
-			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'K' && Line[5] == 'd' && Line[6] == ' ')
-				WaveScan(Line, "map_Kd", "%s\n", Data->Materials[MaterialCount].DiffuseTexture);
-			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'K' && Line[5] == 's' && Line[6] == ' ')
-				WaveScan(Line, "map_Ks", "%s\n", Data->Materials[MaterialCount].SpecularTexture);
-			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'd' && Line[5] == ' ')
-				WaveScan(Line, "map_d", "%s\n", Data->Materials[MaterialCount].AlphaTexture);
-			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'B' && Line[5] == 'u')
-				WaveScan(Line, "map_Bump", "%s\n", Data->Materials[MaterialCount].BumpTexture);
-			else if (Line[0] == 'm' && Line[1] == 'a' && Line[2] == 'p' && Line[3] == '_' && Line[4] == 'D' && Line[5] == 'i')
-				WaveScan(Line, "map_Disp", "%s\n", Data->Materials[MaterialCount].NormalTexture);
-			else if (Line[0] == 'd' && Line[1] == 'i' && Line[2] == 's')
-				WaveScan(Line, "disp", "%s\n", Data->Materials[MaterialCount].HeightTexture);
-			else if (Line[0] == 'n' && Line[1] == 'e')
+			if (WaveLineEqual(Line, "newmtl "))
 			{
-				MaterialCount++;
-				Data->Materials[MaterialCount] = WaveEmptyMaterial;
-				WaveScan(Line, "newmtl", "%s\n", Data->Materials[MaterialCount].MaterialName);
+				CurMaterial = &Data->Materials[MaterialCount++];
 
+				memcpy(CurMaterial, &WaveEmptyMaterial, sizeof(WaveModelMaterial));
+				WaveScan(Line, "newmtl", "%s\n", CurMaterial->MaterialName);
 			}
+			else if (WaveLineEqual(Line, "Ka "))		WaveScan(Line, "Ka", "%f %f %f\n", &CurMaterial->AmbientColor.x, &CurMaterial->AmbientColor.y, &CurMaterial->AmbientColor.z);
+			else if (WaveLineEqual(Line, "Kd "))		WaveScan(Line, "Kd", "%f %f %f\n", &CurMaterial->DiffuseColor.x, &CurMaterial->DiffuseColor.y, &CurMaterial->DiffuseColor.z);
+			else if (WaveLineEqual(Line, "Ks "))		WaveScan(Line, "Ks", "%f %f %f\n", &CurMaterial->SpecularColor.x, &CurMaterial->SpecularColor.y, &CurMaterial->SpecularColor.z);
+			else if (WaveLineEqual(Line, "Ke "))		WaveScan(Line, "Ke", "%f\n", &CurMaterial->Emissive);
+			else if (WaveLineEqual(Line, "Ns "))		WaveScan(Line, "Ns", "%f\n", &CurMaterial->SpecularExponent);
+			else if (WaveLineEqual(Line, "d "))			WaveScan(Line, "d", "%f\n", &CurMaterial->Dissolve);
+			else if (WaveLineEqual(Line, "map_Ka "))	WaveScan(Line, "map_Ka", "%s\n", CurMaterial->AmbientTexture);
+			else if (WaveLineEqual(Line, "map_Kd "))	WaveScan(Line, "map_Kd", "%s\n", CurMaterial->DiffuseTexture);
+			else if (WaveLineEqual(Line, "map_Ks "))	WaveScan(Line, "map_Ks", "%s\n", CurMaterial->SpecularTexture);
+			else if (WaveLineEqual(Line, "map_Ke "))	WaveScan(Line, "map_Ke", "%s\n", CurMaterial->EmissiveTexture);
+			else if (WaveLineEqual(Line, "map_d "))		WaveScan(Line, "map_d", "%s\n", CurMaterial->AlphaTexture);
+			else if (WaveLineEqual(Line, "map_Bump "))	WaveScan(Line, "map_Bump", "%s\n", CurMaterial->BumpTexture);
+			else if (WaveLineEqual(Line, "map_Disp "))	WaveScan(Line, "map_Disp", "%s\n", CurMaterial->DisplacmentTexture);
+			else if (WaveLineEqual(Line, "disp "))		WaveScan(Line, "disp", "%s\n", CurMaterial->HeightTexture);			
+			//PBR-Extension
+			else if (WaveLineEqual(Line, "Pr "))		WaveScan(Line, "Pr", "%f\n", &CurMaterial->Roughness);
+			else if (WaveLineEqual(Line, "Pm "))		WaveScan(Line, "Pm", "%f\n", &CurMaterial->Metallic);
+			else if (WaveLineEqual(Line, "Ps "))		WaveScan(Line, "Ps", "%f\n", &CurMaterial->Sheen);
+			else if (WaveLineEqual(Line, "map_Pr "))	WaveScan(Line, "map_Pr", "%s\n", CurMaterial->RoughnessTexture);
+			else if (WaveLineEqual(Line, "map_Pm "))	WaveScan(Line, "map_Pm", "%s\n", CurMaterial->MetallicTexture);
+			else if (WaveLineEqual(Line, "map_Ps "))	WaveScan(Line, "map_Ps", "%s\n", CurMaterial->SheenTexture);
+			else if (WaveLineEqual(Line, "norm "))		WaveScan(Line, "norm", "%s\n", CurMaterial->NormalTexture);
 
 			Line = WaveGetLine(NULL, &OldBuffer);
 		}
 
-		Data->MaterialCount = MaterialCount + 1;
+		Data->MaterialCount = MaterialCount;
+		if (Settings & WAVE_MATERIAL_USE_MODEL_PATH)
+		{
+			for (uint32_t i = 0; i < Data->MaterialCount; i++)
+			{
+				if (strcmp(Data->Materials[i].AmbientTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].AmbientTexture);
+				if (strcmp(Data->Materials[i].DiffuseTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].DiffuseTexture);
+				if (strcmp(Data->Materials[i].SpecularTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].SpecularTexture);
+				if (strcmp(Data->Materials[i].EmissiveTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].EmissiveTexture);
+				if (strcmp(Data->Materials[i].AlphaTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].AlphaTexture);
+				if (strcmp(Data->Materials[i].BumpTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].BumpTexture);
+				if (strcmp(Data->Materials[i].DisplacmentTexture, "NoTexture") != 0)WaveCombinePathDst(FilePath, Data->Materials[i].DisplacmentTexture);
+				if (strcmp(Data->Materials[i].HeightTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].HeightTexture);
+				if (strcmp(Data->Materials[i].RoughnessTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].RoughnessTexture);
+				if (strcmp(Data->Materials[i].MetallicTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].MetallicTexture);
+				if (strcmp(Data->Materials[i].SheenTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].SheenTexture);
+				if (strcmp(Data->Materials[i].NormalTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].NormalTexture);
+			}
+		}
 	}
 
 	return 1;
 }
 
-WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
+WaveModelData WaveLoadOBJ(const char* FilePath, size_t Length, char* Buffer, uint32_t Settings)
 {
 	WaveModelData Data;
 
@@ -787,6 +930,7 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 	uint32_t FaceCount = 0;
 	uint32_t MaterialCount = 0;
 
+	WaveLoadingStatus = WAVE_STATUS_PARSE_MODEL;
 	char* OldBuffer;
 	char* Line = WaveGetLine(Buffer, &OldBuffer);
 	while (Line)
@@ -805,6 +949,7 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 		Line = WaveGetLine(NULL, &OldBuffer);
 	}
 
+	WaveLoadingStatus = WAVE_STATUS_ALLOCATE_VERTICES;
 	const WaveVec3 NullVec = { 0.0, 0.0, 0.0 };
 	WaveVec3* Vertices = (WaveVec3*)calloc(VertexCount, sizeof(WaveVec3));
 	WaveVec3* VertexTextures = (WaveVec3*)calloc(VertexTextureCount, sizeof(WaveVec3));
@@ -819,13 +964,26 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 	MaterialCount = 0;
 
 	uint32_t VertexReferenceIndex = 0;
-	WaveVertexReference VertexReferences[4];
+	uint32_t VertexReferenceSize = 64;
+	WaveVertexReference* VertexReferences = (WaveVertexReference*)malloc(VertexReferenceSize * sizeof(WaveVertexReference));
 
 	char FoundMaterialFile = 0;
 
 	uint32_t CurrentMaterialIndex = 0;
 
 	WaveMeshData* Mesh = NULL;
+	Data.MeshCount = 1;
+	Data.Meshes = (WaveMeshData*)malloc(Data.MeshCount * sizeof(WaveMeshData));
+	
+	Data.Meshes[0].VertexSize = FaceCount * 4 * 2;
+	if (Data.Meshes[0].VertexSize > WAVE_MAX_ALLOCATION_SIZE)
+		Data.Meshes[0].VertexSize = WAVE_MAX_ALLOCATION_SIZE;
+	Data.Meshes[0].Vertices = (WaveVertexData*)calloc(Data.Meshes[0].VertexSize, sizeof(WaveVertexData));
+	Data.Meshes[0].VertexCount = 0;
+	Data.Meshes[0].IndexCount = 0;
+	Data.Meshes[0].IndexSize = 0;
+	Data.Meshes[0].Indices = NULL;
+	Mesh = &Data.Meshes[0];
 
 	Line = WaveGetLine(Buffer, &OldBuffer);
 	while (Line)
@@ -835,33 +993,30 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 			char MaterialFile[1024];
 			WaveScan(Line, "mtllib", "%[^\r\n]%*c\r\n", MaterialFile);
 
-			if (WaveLoadMTL(MaterialFile, &Data))
+			WaveLoadingStatus = WAVE_STATUS_PARSE_MATERIAL;
+			if (WaveLoadMTL(FilePath, MaterialFile, &Data, Settings))
 			{
 				Data.MeshCount = Data.MaterialCount;
+				free(Data.Meshes[0].Vertices);//assuming that the model just loads one material file
+				free(Data.Meshes);
 				Data.Meshes = (WaveMeshData*)malloc(Data.MeshCount * sizeof(WaveMeshData));
 
 				for (uint32_t i = 0; i < Data.MeshCount; i++)
 				{
 					Data.Meshes[i].VertexSize = FaceCount * 3;
+					if (Data.Meshes[i].VertexSize > WAVE_MAX_ALLOCATION_SIZE)
+						Data.Meshes[i].VertexSize = WAVE_MAX_ALLOCATION_SIZE;
 					Data.Meshes[i].Vertices = (WaveVertexData*)calloc(Data.Meshes[i].VertexSize, sizeof(WaveVertexData));
+					if (Data.Meshes[i].Vertices == NULL)
+						printf("Failed to allocate Mesh: %d\n", i);
 					Data.Meshes[i].VertexCount = 0;
 					Data.Meshes[i].IndexCount = 0;
 					Data.Meshes[i].IndexSize = 0;
-					Data.Meshes[i].Indices = NULL;
+					Data.Meshes[i].Indices = NULL;					
 				}
-			}	
-			else
-			{
-				Data.MeshCount = 1;
-				Data.Meshes = (WaveMeshData*)malloc(Data.MeshCount * sizeof(WaveMeshData));
-				Data.Meshes[0].VertexSize = FaceCount * 4 * 2;
-				Data.Meshes[0].Vertices = (WaveVertexData*)calloc(Data.Meshes[0].VertexSize, sizeof(WaveVertexData));
-				Data.Meshes[0].VertexCount = 0;
-				Data.Meshes[0].IndexCount = 0;
-				Data.Meshes[0].IndexSize = 0;
-				Data.Meshes[0].Indices = NULL;
 				Mesh = &Data.Meshes[0];
-			}
+			}	
+			WaveLoadingStatus = WAVE_STATUS_PARSE_MODEL;
 		}
 
 		if (Line[0] == 'u' && Line[1] == 's' && Data.MaterialCount != 0 && Settings & WAVE_LOAD_MATERIAL)
@@ -917,26 +1072,34 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 				VertexReferences[VertexReferenceIndex].VN = vn;
 
 				VertexReferenceIndex++;
+
+				if (VertexReferenceIndex >= VertexReferenceSize)
+				{
+					VertexReferenceSize += 64;
+					VertexReferences = (WaveVertexReference*)realloc(VertexReferences, VertexReferenceSize * sizeof(WaveVertexReference));
+				}
+
 				TempLine = strtok(NULL, " ");
 			}
 
 			for (uint32_t m = 1; m + 1 < VertexReferenceIndex; m++)
 			{
 				WaveVertexReference* p[3] = { &VertexReferences[0], &VertexReferences[m], &VertexReferences[m + 1] };
-				//	printf("%d %d %d\n", VertexReferences[0].V, VertexReferences[m].V, VertexReferences[m + 1].V);
-
-				WaveVec3 U = { WaveSub(Vertices[p[1]->V - 1], Vertices[p[0]->V - 1]) };
-				WaveVec3 V = { WaveSub(Vertices[p[2]->V - 1], Vertices[p[0]->V - 1]) };
-				WaveVec3 FaceNormal = WaveNormalize(WaveCross(U, V));
 
 				for (uint32_t j = 0; j < 3; j++)
 				{
 					WaveVertexData Vertex;
 
-					if (Mesh->VertexCount + 1 >= Mesh->VertexSize)
+					if (Mesh->VertexCount >= Mesh->VertexSize)
 					{
-						Mesh->VertexSize += FaceCount * 3;
+						uint32_t TmpCount = FaceCount * 3;
+						if (TmpCount > WAVE_MAX_ALLOCATION_SIZE)
+							TmpCount = WAVE_MAX_ALLOCATION_SIZE;
+
+						Mesh->VertexSize += TmpCount;
 						Mesh->Vertices = (WaveVertexData*)realloc(Mesh->Vertices, Mesh->VertexSize * sizeof(WaveVertexData));
+						if (Mesh->Vertices == NULL)
+							printf("Wave Error: Failed to resize vertex buffer!\n");
 					}						
 
 					Vertex.VertexIndex = Mesh->VertexCount;
@@ -952,7 +1115,13 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 					if ((Settings & WAVE_GEN_UVS) && p[j]->VT == 0)
 						WaveGenUVs(&Vertex);
 					if ((Settings & WAVE_GEN_NORMALS) && p[j]->VN == 0)
+					{
+						WaveVec3 U = { WaveSub(Vertices[p[1]->V - 1], Vertices[p[0]->V - 1]) };
+						WaveVec3 V = { WaveSub(Vertices[p[2]->V - 1], Vertices[p[0]->V - 1]) };
+						WaveVec3 FaceNormal = WaveNormalize(WaveCross(U, V));
+
 						Vertex.Normals = FaceNormal;
+					}						
 
 					Mesh->Vertices[Mesh->VertexCount++] = Vertex;
 				}
@@ -962,6 +1131,9 @@ WaveModelData WaveLoadOBJ(size_t Length, char* Buffer, uint32_t Settings)
 		Line = WaveGetLine(NULL, &OldBuffer);
 	}
 
+	WaveLoadingStatus = WAVE_STATUS_REDUCE_SIZE;
+
+	free(VertexReferences);
 	free(VertexNormals);
 	free(VertexTextures);
 	free(Vertices);
@@ -995,14 +1167,16 @@ typedef struct
 
 #pragma pack(pop)
 
-WaveModelData WaveLoadSTL(size_t Length, char* Buffer, uint32_t Settings)
+WaveModelData WaveLoadSTL(const char* FilePath, size_t Length, char* Buffer, uint32_t Settings)
 {
+	WaveLoadingStatus = WAVE_STATUS_PARSE_MODEL;
 	WaveSTLDescription* Description = (WaveSTLDescription*)Buffer;
 	Buffer += sizeof(WaveSTLDescription);
 	WaveSTLVertex* VertexArray = (WaveSTLVertex*)Buffer;
 
 	uint32_t VertexCount = Description->Triangles * 3;
 
+	WaveLoadingStatus = WAVE_STATUS_ALLOCATE_VERTICES;
 	WaveModelData ModelData;
 	ModelData.MaterialCount = 0;
 	ModelData.Materials = &WaveEmptyMaterial;
@@ -1020,6 +1194,7 @@ WaveModelData WaveLoadSTL(size_t Length, char* Buffer, uint32_t Settings)
 
 	WaveVertexData* Vertices = ModelData.Meshes[0].Vertices;
 
+	WaveLoadingStatus = WAVE_STATUS_PARSE_MODEL;
 	uint32_t j = 0;
 	for (uint32_t i = 0; i < Description->Triangles; i++)
 	{		
@@ -1052,8 +1227,158 @@ WaveModelData WaveLoadSTL(size_t Length, char* Buffer, uint32_t Settings)
 	return ModelData;
 }
 
+typedef struct WaveGLTFArrayType WaveGLTFArray;
+typedef struct WaveGLTFObjectType WaveGLTFObject;
 
-WaveModelData WaveLoadGLTF(size_t Length, char* Buffer, uint32_t Settings)
+typedef struct
+{
+	char* Name;
+
+	double Number;
+	char* String;
+	char Boolean;
+	WaveGLTFObject* Object;
+	WaveGLTFArray* Array;
+} WaveGLTFDataTypes;
+
+typedef enum
+{
+	WAVE_JSON_DATA_TYPE_OBJECT = 0x0,
+	WAVE_JSON_DATA_TYPE_ARRAY = 0x1,
+	WAVE_JSON_DATA_TYPE_STRING = 0x2,
+	WAVE_JSON_DATA_TYPE_BOOLEAN = 0x3,
+	WAVE_JSON_DATA_TYPE_NUMBER = 0x4,
+} WaveJsonDataType;
+
+struct WaveGLTFObjectType
+{
+	char* Name;
+	uint32_t DataCount;
+	WaveGLTFDataTypes* Data;
+};
+
+struct WaveGLTFArrayType
+{
+	char* Name;
+	uint32_t DataCount;
+	WaveGLTFDataTypes* Data;
+};
+
+
+#define WAVE_GLTF_DEFAULT_STR_LENGTH 64
+
+const char base64_pad = '=';
+
+const char base64_table[] = {
+	'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+	'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+	'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+	'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', '\0'
+};
+
+unsigned char* WaveBase64Decode(const char* data, size_t input_length, size_t* output_length) {
+	if (input_length % 4 != 0) {
+		return NULL;
+	}
+
+	*output_length = input_length / 4 * 3;
+	if (data[input_length - 1] == base64_pad) (*output_length)--;
+	if (data[input_length - 2] == base64_pad) (*output_length)--;
+
+	unsigned char* decoded_data = (unsigned char*)malloc(*output_length);
+	if (decoded_data == NULL) return NULL;
+
+	for (int i = 0, j = 0; i < input_length;) {
+		uint32_t sextet_a = data[i] == base64_pad ? 0 & i++ : base64_table[data[i++]];
+		uint32_t sextet_b = data[i] == base64_pad ? 0 & i++ : base64_table[data[i++]];
+		uint32_t sextet_c = data[i] == base64_pad ? 0 & i++ : base64_table[data[i++]];
+		uint32_t sextet_d = data[i] == base64_pad ? 0 & i++ : base64_table[data[i++]];
+
+		uint32_t triple = (sextet_a << 3 * 6)
+			+ (sextet_b << 2 * 6)
+			+ (sextet_c << 1 * 6)
+			+ (sextet_d << 0 * 6);
+
+		if (j < *output_length) decoded_data[j++] = (triple >> 2 * 8) & 0xFF;
+		if (j < *output_length) decoded_data[j++] = (triple >> 1 * 8) & 0xFF;
+		if (j < *output_length) decoded_data[j++] = (triple >> 0 * 8) & 0xFF;
+	}
+
+	return decoded_data;
+}
+
+void WaveGetJsonString(size_t* Index, char* Buffer, char** Name, uint32_t* NameAllocated, uint32_t* NameLength)
+{
+	char* TempName = *Name;
+	uint32_t TempNameAllocated = *NameAllocated; 
+	uint32_t TempNameLength = *NameLength;
+	size_t i = *Index;
+	if (TempNameAllocated != WAVE_GLTF_DEFAULT_STR_LENGTH)
+	{
+		TempNameAllocated = WAVE_GLTF_DEFAULT_STR_LENGTH;
+		TempName = (char*)realloc(TempName, TempNameAllocated);
+	}
+
+	TempNameLength = 0;
+	i++;
+	while (Buffer[i] != '"')
+	{
+		TempName[TempNameLength++] = Buffer[i++];
+		if (TempNameLength + 1 > TempNameAllocated)
+		{
+			TempNameAllocated += WAVE_GLTF_DEFAULT_STR_LENGTH;
+			TempName = (char*)realloc(TempName, TempNameAllocated);
+		}
+	}
+	TempName[TempNameLength++] = '\0';
+	i++;
+
+	*Index = i;
+	*Name = TempName;
+	*NameAllocated = TempNameAllocated;
+	*NameLength = TempNameLength;
+}
+
+char WaveGetJsonDataType(size_t* Index, char* Buffer)
+{
+	char DataType = -1;
+	size_t i = *Index;
+	while (1)
+	{		
+		if (Buffer[i] == '{')
+		{
+			DataType = WAVE_JSON_DATA_TYPE_OBJECT;
+			break;
+		}			
+		else if (Buffer[i] == '[')
+		{
+			DataType = WAVE_JSON_DATA_TYPE_ARRAY;
+			break;
+		}			
+		else if (Buffer[i] == '"')
+		{
+			DataType = WAVE_JSON_DATA_TYPE_STRING;
+			break;
+		}
+		else if (Buffer[i] == 't' || Buffer[i] == 'f')
+		{
+			DataType = WAVE_JSON_DATA_TYPE_BOOLEAN;
+			break;
+		}
+		else if (Buffer[i] != ' ' && Buffer[i] != ':')
+		{
+			DataType = WAVE_JSON_DATA_TYPE_NUMBER;
+			break;
+		}
+		i++;
+	}
+	*Index = i;
+
+	return DataType;
+}
+
+WaveModelData WaveLoadGLTF(const char* FilePath, size_t Length, char* Buffer, uint32_t Settings)
 {
 	WaveModelData ModelData;
 	ModelData.MaterialCount = 0;
@@ -1061,27 +1386,60 @@ WaveModelData WaveLoadGLTF(size_t Length, char* Buffer, uint32_t Settings)
 	ModelData.MeshCount = 0;
 	ModelData.Meshes = (WaveMeshData*)malloc(ModelData.MeshCount * sizeof(WaveMeshData));
 	
-	for (size_t i = 0; i < Length; i++)
+	uint32_t ObjectCount = 0;
+	uint32_t ObjectsAllocated = WAVE_GLTF_DEFAULT_STR_LENGTH;
+	WaveGLTFObject* Objects = (WaveGLTFObject*)malloc(ObjectsAllocated * sizeof(WaveGLTFObject));
+	WaveGLTFObject* CurrentObject = &Objects[0];
+
+	size_t i;
+	for (i = Length - 1; i > 0; i--)
+		if (Buffer[i] == '}')
+		{
+			Length = i - 1;
+			break;
+		}
+			
+	//Find the first no name object
+	for (i = 0; i < Length; i++)
 	{
 		if (Buffer[i] == '{')
 		{
-
-		}
-
-		if (Buffer[i] == '}')
-		{
-
+			CurrentObject = &Objects[ObjectCount];
+			memset(&Objects[ObjectCount++], 0, sizeof(WaveGLTFObject));
+			CurrentObject->Name = (char*)malloc(1);
+			i++;
+			break;
 		}
 	}
+
+	char Begin = 0;
+	uint32_t TempNameLength = 0;
+	uint32_t TempNameAllocated = WAVE_GLTF_DEFAULT_STR_LENGTH;
+	char* TempName = (char*)malloc(TempNameAllocated);
+
+	for (; i < Length; i++)
+	{
+		if (Buffer[i] == '"')
+		{
+			WaveGetJsonString(&i, Buffer, &TempName, &TempNameAllocated, &TempNameLength);
+			char DataType = WaveGetJsonDataType(&i, Buffer);
+			printf(Buffer + i);
+			exit(22);
+		}
+	}
+
+	size_t j = 0;
+	printf("Decode: %s\n", WaveBase64Decode("AACAPwAAgD8AAIC/AACAPwAAgD8AAIC/AACAPwAAgD8AAIC/AACAPwAAgL8AAIC/AACAPwAAgL8AAIC/AACAPwAAgL8AAIC/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgL8AAIA/AACAPwAAgL8AAIA/AACAPwAAgL8AAIA/AACAvwAAgD8AAIC/AACAvwAAgD8AAIC/AACAvwAAgD8AAIC/AACAvwAAgL8AAIC/AACAvwAAgL8AAIC/AACAvwAAgL8AAIC/AACAvwAAgD8AAIA/AACAvwAAgD8AAIA/AACAvwAAgD8AAIA/AACAvwAAgL8AAIA/AACAvwAAgL8AAIA/AACAvwAAgL8AAIA/AAAAAAAAAAAAAIC/AAAAAAAAgD8AAACAAACAPwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIC/AACAPwAAAAAAAACAAAAAAAAAAAAAAIA/AAAAAAAAgD8AAACAAACAPwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIA/AACAPwAAAAAAAACAAACAvwAAAAAAAACAAAAAAAAAAAAAAIC/AAAAAAAAgD8AAACAAACAvwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIC/AACAvwAAAAAAAACAAAAAAAAAAAAAAIA/AAAAAAAAgD8AAACAAACAvwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIA/AAAgPwAAAD8AACA/AAAAPwAAID8AAAA/AADAPgAAAD8AAMA+AAAAPwAAwD4AAAA/AAAgPwAAgD4AACA/AACAPgAAID8AAIA+AADAPgAAgD4AAMA+AACAPgAAwD4AAIA+AAAgPwAAQD8AACA/AABAPwAAYD8AAAA/AADAPgAAQD8AAAA+AAAAPwAAwD4AAEA/AAAgPwAAgD8AACA/AAAAAAAAYD8AAIA+AADAPgAAgD8AAAA+AACAPgAAwD4AAAAAAQAOABQAAQAUAAcACgAGABMACgATABcAFQASAAwAFQAMAA8AEAADAAkAEAAJABYABQACAAgABQAIAAsAEQANAAAAEQAAAAQA", 1120, &j));
+
+	free(TempName);
 
 	return ModelData;
 }
 
 WaveModelData WaveLoadModel(const char* Path, uint32_t Settings)
 {
+	WaveLoadingStatus = 0;
 	WaveModelData ModelData;
-	
-
 	uint32_t i;
 	for (i = strlen(Path) - 1; i > 0; i--)
 		if (Path[i] == '.') break;
@@ -1100,34 +1458,35 @@ WaveModelData WaveLoadModel(const char* Path, uint32_t Settings)
 		return ModelData;
 	}
 
+	char* FilePath = (char*)malloc(strlen(Path));
+
+	for (i = strlen(Path) - 1; i > 0; i--)
+		if (Path[i] == '/' ||
+			Path[i] == '\\') break;
+
+	memcpy(FilePath, Path, i + 1);
+	FilePath[i + 1] = '\0';
+
+	WaveLoadingStatus = WAVE_STATUS_OPENED;
+
 	if (strcmp(Extension + 1, "obj") == 0)
-		ModelData = WaveLoadOBJ(FileSize, Buffer, Settings);
+		ModelData = WaveLoadOBJ(FilePath, FileSize, Buffer, Settings);
 
 	else if (strcmp(Extension + 1, "stl") == 0)
-		ModelData = WaveLoadSTL(FileSize, Buffer, Settings);
+		ModelData = WaveLoadSTL(FilePath, FileSize, Buffer, Settings);
 
 	else if (strcmp(Extension + 1, "gltf") == 0)
-		ModelData = WaveLoadGLTF(FileSize, Buffer, Settings);
+		ModelData = WaveLoadGLTF(FilePath, FileSize, Buffer, Settings);
 	else
 		printf("%s format is not supported\n", Extension + 1);
 
+	free(FilePath);
 	free(Buffer);
+	WaveLoadingStatus = WAVE_STATUS_CLOSED;
 
-	if (Settings & WAVE_PRINT_DEBUG_INOFS)
-	{
-		printf("Loaded Model\n");
-		printf("Start post processing pipeline\n");
-
-		WaveRunPPP(&ModelData, Settings);
-
-		printf("Finished post processing pipeline\n");
-
-	//	printf("Vertices: %d\n", ModelData.VertexCount);
-	//	printf("Indices: %d\n\n", ModelData.IndexCount);
-	}
-	else
-		WaveRunPPP(&ModelData, Settings);
-	
+	WaveLoadingStatus = WAVE_STATUS_START_PPP;
+	WaveRunPPP(&ModelData, Settings);
+	WaveLoadingStatus = WAVE_STATUS_FINISHED;
 
 	return ModelData;
 }
@@ -1145,7 +1504,4 @@ void WaveFreeModel(WaveModelData* ModelData)
 			free(Mesh->Indices);
 	}
 	free(ModelData->Meshes);
-//	free(ModelData->Vertices);
-//	if (ModelData->IndexCount > 0)
-//		free(ModelData->Indices);
 }

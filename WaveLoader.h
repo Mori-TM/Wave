@@ -512,7 +512,7 @@ void WaveCombineMeshes(WaveMeshData* A, WaveMeshData* B, WaveMeshData* Dst)
 
 	memcpy(Dst->Vertices, A->Vertices, A->VertexCount * sizeof(WaveVertexData));
 	memcpy(Dst->Vertices + A->VertexCount, B->Vertices, B->VertexCount * sizeof(WaveVertexData));
-	free(A->Vertices);
+//	free(A->Vertices);
 
 	if (A->IndexCount != 0 && B->IndexCount != 0)
 	{
@@ -537,16 +537,113 @@ void WaveRemoveRedundantMaterials(WaveModelData* ModelData)
 		printf("%s\n", ModelData->Meshes[i].Material->DiffuseTexture);
 	}
 	
+	printf("Mesh Count: %d, Material Count: %d\n", ModelData->MeshCount, ModelData->MaterialCount);
 
-	uint32_t MeshCount = 0;
+	uint32_t MeshCount = 1;
 	WaveMeshData* NewMeshes = (WaveMeshData*)calloc(ModelData->MeshCount, sizeof(WaveMeshData));
-
-	uint32_t MaterialCount = 0;
-	WaveModelMaterial* NewMaterials = (WaveModelMaterial*)calloc(ModelData->MaterialCount, sizeof(WaveModelMaterial));
+	NewMeshes[0] = ModelData->Meshes[0];
+//	for (uint32_t i = 0; i < ModelData->MeshCount; i++)
+//		NewMeshes[i] = ModelData->Meshes[i];
 
 //	NewMeshes[0] = ModelData->Meshes[0];
 //	NewMaterials[0] = ModelData->Materials[0];
+
 	printf("\n\n");
+
+	WaveMeshData RefMesh;
+	WaveMeshData RefMesh1;
+	RefMesh = ModelData->Meshes[0];
+
+	for (uint32_t i = 0; i < ModelData->MeshCount - 1; i++)
+	{
+		WaveMeshData* A = ((WaveMeshData*)&NewMeshes[MeshCount - 1]);
+		WaveMeshData* B = ((WaveMeshData*)&ModelData->Meshes[i + 1]);
+
+		if (WaveCompareMaterials(A->Material, B->Material) == 0) //Are the same
+		{
+			WaveCombineMeshes(A, B, &RefMesh);
+
+			RefMesh1 = NewMeshes[MeshCount - 1];
+			WaveCombineMeshes(&RefMesh1, &RefMesh, &NewMeshes[MeshCount - 1]);
+		}
+		else
+		{
+			NewMeshes[MeshCount++] = *B;
+		}
+	}
+
+	uint32_t MaterialCount = MeshCount;
+	WaveModelMaterial* NewMaterials = (WaveModelMaterial*)calloc(ModelData->MaterialCount, sizeof(WaveModelMaterial));
+
+	for (uint32_t i = 0; i < MeshCount; i++)
+	{
+		NewMaterials[i] = *NewMeshes[i].Material;
+		NewMeshes[i].Material = &NewMaterials[i];
+		printf("Tex %s\n", NewMeshes[i].Material->DiffuseTexture);
+	}
+		
+
+	free(ModelData->Meshes);
+	free(ModelData->Materials);
+	uint32_t Diff = (ModelData->MaterialCount - MeshCount);
+	printf("Removed material: %d\n", Diff);
+
+	ModelData->MaterialCount = MaterialCount;
+	ModelData->MeshCount = MeshCount;
+	ModelData->Meshes = NewMeshes;
+	ModelData->Materials = NewMaterials;
+
+	if (Diff != 0)
+		ModelData->Meshes = (WaveMeshData*)realloc(ModelData->Meshes, ModelData->MeshCount * sizeof(WaveMeshData));
+
+	for (uint32_t j = 0; j < ModelData->MeshCount; j++)
+	{
+		WaveMeshData* Data = &ModelData->Meshes[j];
+
+		for (uint32_t i = 0; i < Data->VertexCount; i++)
+			Data->Vertices[i].VertexIndex = i;
+	}
+
+	uint32_t j = 0;
+	/*
+	for (uint32_t i = 1; i < ModelData->MeshCount - 1; i += 2)
+	{
+		WaveMeshData* A = ((WaveMeshData*)&ModelData->Meshes[i]);
+		WaveMeshData* B = ((WaveMeshData*)&ModelData->Meshes[i + 1]);
+
+		if (WaveCompareMaterials(A->Material, B->Material) == 0) //Are the same
+		{
+			WaveCombineMeshes(A, B, &RefMesh);
+
+			if (WaveCompareMaterials(NewMeshes[MeshCount].Material, RefMesh.Material) == 0)
+			{
+				RefMesh1 = NewMeshes[MeshCount];
+				WaveCombineMeshes(&RefMesh1, &RefMesh, &NewMeshes[MeshCount]);
+				NewMeshes[MeshCount].Material = &NewMaterials[MaterialCount];
+			}				
+			else
+			{
+				WaveCombineMeshes(A, B, &NewMeshes[++MeshCount]);
+				NewMaterials[++MaterialCount] = *A->Material;
+				NewMeshes[MeshCount].Material = &NewMaterials[MaterialCount];
+			}
+				
+		}
+		else
+		{
+
+			NewMeshes[++MeshCount] = *A;	
+			NewMaterials[++MaterialCount] = *A->Material;
+			NewMeshes[MeshCount].Material = &NewMaterials[MaterialCount];
+
+			NewMeshes[++MeshCount] = *B;	
+			NewMaterials[++MaterialCount] = *B->Material;
+			NewMeshes[MeshCount].Material = &NewMaterials[MaterialCount];
+		}
+	}
+	*/
+
+	/*
 	uint32_t j = 0;
 	
 			//FIX in gen indices also set i = 1
@@ -561,47 +658,20 @@ void WaveRemoveRedundantMaterials(WaveModelData* ModelData)
 		if (WaveCompareMaterials(A->Material, B->Material) != 0)
 		{
 			printf("%s\n", B->Material->DiffuseTexture);
-		//	uint32_t OldVertexCount = A->VertexCount;
-		//	uint32_t OldIndexCount = A->IndexCount;
-		//
-		//	A->VertexCount += B->VertexCount;
-		//	A->IndexCount += B->IndexCount;
-		//	A->VertexSize = A->VertexCount;
-		//	A->IndexSize = A->IndexCount;
-		//	A->Vertices = (WaveVertexData*)realloc(A->Vertices, A->VertexCount * sizeof(WaveVertexData));
-		//	A->Indices = (uint32_t*)realloc(A->Indices, A->IndexCount * sizeof(uint32_t));
-		//
-		//	memcpy(A->Vertices + OldVertexCount, B->Vertices, B->VertexCount * sizeof(WaveVertexData));
-		//	memcpy(A->Indices + OldIndexCount, B->Indices, B->IndexCount * sizeof(uint32_t));
 			if (i == 0)
+			{
 				NewMeshes[0] = *A;
+				NewMaterials[MaterialCount++] = *A->Material;
+			}
+				
+
 			MeshCount++;
-		//	WaveCombineMeshes(A, B, &NewMeshes[MeshCount++]);
-		//	NewMeshes[MeshCount++] = *B;
-			//	WaveMeshData* Mesh = &NewMeshes[MeshCount++];
-			//	uint32_t OldVertexCount = Mesh->VertexCount;
-			//	uint32_t OldIndexCount = Mesh->IndexCount;
-			//	Mesh->VertexCount += B->VertexCount;
-			//	Mesh->IndexCount += B->IndexCount;
-			//	Mesh->VertexSize = Mesh->VertexCount;
-			//	Mesh->IndexSize = Mesh->IndexCount;
-			//	Mesh->Vertices = (WaveVertexData*)realloc(Mesh->Vertices, Mesh->VertexCount * sizeof(WaveVertexData));
-			//	Mesh->Indices = (uint32_t*)realloc(Mesh->Indices, Mesh->IndexCount * sizeof(uint32_t));
-			//	
-			//	memcpy(Mesh->Vertices + OldVertexCount, B->Vertices, B->VertexCount * sizeof(WaveVertexData));
-			//	memcpy(Mesh->Indices + OldIndexCount, B->Indices, B->IndexCount * sizeof(uint32_t));
 
 			NewMaterials[MaterialCount++] = *B->Material;
 		}
 		else if (i == 0)
 		{
 			NewMeshes[MeshCount++] = *A;
-			//MeshCount++;
-			//NewMeshes[MeshCount++] = *B;
-		//	WaveMeshData Tmp = NewMeshes[MeshCount];
-		//	WaveCombineMeshes(A, B, &NewMeshes[MeshCount]);
-		//	MeshCount++;
-		//	WaveCombineMeshes(A, B, &NewMeshes[MeshCount++]);
 			NewMaterials[MaterialCount++] = *B->Material;
 		}
 
@@ -620,7 +690,8 @@ void WaveRemoveRedundantMaterials(WaveModelData* ModelData)
 	//
 	//	B->NewVertexIndex = j;
 	}
-
+	*/
+	/*
 	free(ModelData->Meshes);
 	free(ModelData->Materials);
 	printf("Removed material: %d\n", (ModelData->MaterialCount - MeshCount));
@@ -639,6 +710,12 @@ void WaveRemoveRedundantMaterials(WaveModelData* ModelData)
 		for (uint32_t i = 0; i < Data->VertexCount; i++)
 			Data->Vertices[i].VertexIndex = i;
 	}
+
+	for (uint32_t i = 0; i < ModelData->MeshCount; i++)
+	{
+		printf("%s\n", ModelData->Meshes[i].Material->DiffuseTexture);
+	}
+	*/
 
 //	qsort(ModelData->Materials, ModelData->MaterialCount, sizeof(WaveModelMaterial), WaveCompareMaterials);
 }
@@ -865,7 +942,7 @@ char WaveLoadMTL(const char* FilePath, const char* FileName, WaveModelData* Data
 				CurMaterial = &Data->Materials[MaterialCount++];
 
 				memcpy(CurMaterial, &WaveEmptyMaterial, sizeof(WaveModelMaterial));
-				WaveScan(Line, "newmtl", "%s\n", CurMaterial->MaterialName);
+				WaveScan(Line, "newmtl", "%[^\r\n]%*c\r\n", CurMaterial->MaterialName);
 			}
 			else if (WaveLineEqual(Line, "Ka "))		WaveScan(Line, "Ka", "%f %f %f\n", &CurMaterial->AmbientColor.x, &CurMaterial->AmbientColor.y, &CurMaterial->AmbientColor.z);
 			else if (WaveLineEqual(Line, "Kd "))		WaveScan(Line, "Kd", "%f %f %f\n", &CurMaterial->DiffuseColor.x, &CurMaterial->DiffuseColor.y, &CurMaterial->DiffuseColor.z);
@@ -873,22 +950,22 @@ char WaveLoadMTL(const char* FilePath, const char* FileName, WaveModelData* Data
 			else if (WaveLineEqual(Line, "Ke "))		WaveScan(Line, "Ke", "%f\n", &CurMaterial->Emissive);
 			else if (WaveLineEqual(Line, "Ns "))		WaveScan(Line, "Ns", "%f\n", &CurMaterial->SpecularExponent);
 			else if (WaveLineEqual(Line, "d "))			WaveScan(Line, "d", "%f\n", &CurMaterial->Dissolve);
-			else if (WaveLineEqual(Line, "map_Ka "))	WaveScan(Line, "map_Ka", "%s\n", CurMaterial->AmbientTexture);
-			else if (WaveLineEqual(Line, "map_Kd "))	WaveScan(Line, "map_Kd", "%s\n", CurMaterial->DiffuseTexture);
-			else if (WaveLineEqual(Line, "map_Ks "))	WaveScan(Line, "map_Ks", "%s\n", CurMaterial->SpecularTexture);
-			else if (WaveLineEqual(Line, "map_Ke "))	WaveScan(Line, "map_Ke", "%s\n", CurMaterial->EmissiveTexture);
-			else if (WaveLineEqual(Line, "map_d "))		WaveScan(Line, "map_d", "%s\n", CurMaterial->AlphaTexture);
-			else if (WaveLineEqual(Line, "map_Bump "))	WaveScan(Line, "map_Bump", "%s\n", CurMaterial->BumpTexture);
-			else if (WaveLineEqual(Line, "map_Disp "))	WaveScan(Line, "map_Disp", "%s\n", CurMaterial->DisplacmentTexture);
-			else if (WaveLineEqual(Line, "disp "))		WaveScan(Line, "disp", "%s\n", CurMaterial->HeightTexture);			
+			else if (WaveLineEqual(Line, "map_Ka "))	WaveScan(Line, "map_Ka", "%[^\r\n]%*c\r\n", CurMaterial->AmbientTexture);
+			else if (WaveLineEqual(Line, "map_Kd "))	WaveScan(Line, "map_Kd", "%[^\r\n]%*c\r\n", CurMaterial->DiffuseTexture);
+			else if (WaveLineEqual(Line, "map_Ks "))	WaveScan(Line, "map_Ks", "%[^\r\n]%*c\r\n", CurMaterial->SpecularTexture);
+			else if (WaveLineEqual(Line, "map_Ke "))	WaveScan(Line, "map_Ke", "%[^\r\n]%*c\r\n", CurMaterial->EmissiveTexture);
+			else if (WaveLineEqual(Line, "map_d "))		WaveScan(Line, "map_d", "%[^\r\n]%*c\r\n", CurMaterial->AlphaTexture);
+			else if (WaveLineEqual(Line, "map_Bump "))	WaveScan(Line, "map_Bump", "%[^\r\n]%*c\r\n", CurMaterial->BumpTexture);
+			else if (WaveLineEqual(Line, "map_Disp "))	WaveScan(Line, "map_Disp", "%[^\r\n]%*c\r\n", CurMaterial->DisplacmentTexture);
+			else if (WaveLineEqual(Line, "disp "))		WaveScan(Line, "disp", "%[^\r\n]%*c\r\n", CurMaterial->HeightTexture);			
 			//PBR-Extension
 			else if (WaveLineEqual(Line, "Pr "))		WaveScan(Line, "Pr", "%f\n", &CurMaterial->Roughness);
 			else if (WaveLineEqual(Line, "Pm "))		WaveScan(Line, "Pm", "%f\n", &CurMaterial->Metallic);
 			else if (WaveLineEqual(Line, "Ps "))		WaveScan(Line, "Ps", "%f\n", &CurMaterial->Sheen);
-			else if (WaveLineEqual(Line, "map_Pr "))	WaveScan(Line, "map_Pr", "%s\n", CurMaterial->RoughnessTexture);
-			else if (WaveLineEqual(Line, "map_Pm "))	WaveScan(Line, "map_Pm", "%s\n", CurMaterial->MetallicTexture);
-			else if (WaveLineEqual(Line, "map_Ps "))	WaveScan(Line, "map_Ps", "%s\n", CurMaterial->SheenTexture);
-			else if (WaveLineEqual(Line, "norm "))		WaveScan(Line, "norm", "%s\n", CurMaterial->NormalTexture);
+			else if (WaveLineEqual(Line, "map_Pr "))	WaveScan(Line, "map_Pr", "%[^\r\n]%*c\r\n", CurMaterial->RoughnessTexture);
+			else if (WaveLineEqual(Line, "map_Pm "))	WaveScan(Line, "map_Pm", "%[^\r\n]%*c\r\n", CurMaterial->MetallicTexture);
+			else if (WaveLineEqual(Line, "map_Ps "))	WaveScan(Line, "map_Ps", "%[^\r\n]%*c\r\n", CurMaterial->SheenTexture);
+			else if (WaveLineEqual(Line, "norm "))		WaveScan(Line, "norm", "%[^\r\n]%*c\r\n", CurMaterial->NormalTexture);
 
 			Line = WaveGetLine(NULL, &OldBuffer);
 		}
@@ -898,18 +975,20 @@ char WaveLoadMTL(const char* FilePath, const char* FileName, WaveModelData* Data
 		{
 			for (uint32_t i = 0; i < Data->MaterialCount; i++)
 			{
-				if (strcmp(Data->Materials[i].AmbientTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].AmbientTexture);
-				if (strcmp(Data->Materials[i].DiffuseTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].DiffuseTexture);
-				if (strcmp(Data->Materials[i].SpecularTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].SpecularTexture);
-				if (strcmp(Data->Materials[i].EmissiveTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].EmissiveTexture);
-				if (strcmp(Data->Materials[i].AlphaTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].AlphaTexture);
-				if (strcmp(Data->Materials[i].BumpTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].BumpTexture);
-				if (strcmp(Data->Materials[i].DisplacmentTexture, "NoTexture") != 0)WaveCombinePathDst(FilePath, Data->Materials[i].DisplacmentTexture);
-				if (strcmp(Data->Materials[i].HeightTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].HeightTexture);
-				if (strcmp(Data->Materials[i].RoughnessTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].RoughnessTexture);
-				if (strcmp(Data->Materials[i].MetallicTexture, "NoTexture") != 0)	WaveCombinePathDst(FilePath, Data->Materials[i].MetallicTexture);
-				if (strcmp(Data->Materials[i].SheenTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].SheenTexture);
-				if (strcmp(Data->Materials[i].NormalTexture, "NoTexture") != 0)		WaveCombinePathDst(FilePath, Data->Materials[i].NormalTexture);
+				printf("Ha: %s\n", Data->Materials[i].DiffuseTexture);
+				
+				if (strcmp(Data->Materials[i].AmbientTexture, "NoTexture") != 0		&& Data->Materials[i].AmbientTexture[1] != ':')		WaveCombinePathDst(FilePath, Data->Materials[i].AmbientTexture);
+				if (strcmp(Data->Materials[i].DiffuseTexture, "NoTexture") != 0		&& Data->Materials[i].DiffuseTexture[1] != ':')		WaveCombinePathDst(FilePath, Data->Materials[i].DiffuseTexture);
+				if (strcmp(Data->Materials[i].SpecularTexture, "NoTexture") != 0	&& Data->Materials[i].SpecularTexture[1] != ':')	WaveCombinePathDst(FilePath, Data->Materials[i].SpecularTexture);
+				if (strcmp(Data->Materials[i].EmissiveTexture, "NoTexture") != 0	&& Data->Materials[i].EmissiveTexture[1] != ':')	WaveCombinePathDst(FilePath, Data->Materials[i].EmissiveTexture);
+				if (strcmp(Data->Materials[i].AlphaTexture, "NoTexture") != 0		&& Data->Materials[i].AlphaTexture[1] != ':')		WaveCombinePathDst(FilePath, Data->Materials[i].AlphaTexture);
+				if (strcmp(Data->Materials[i].BumpTexture, "NoTexture") != 0		&& Data->Materials[i].BumpTexture[1] != ':')		WaveCombinePathDst(FilePath, Data->Materials[i].BumpTexture);
+				if (strcmp(Data->Materials[i].DisplacmentTexture, "NoTexture") != 0 && Data->Materials[i].DisplacmentTexture[1] != ':')	WaveCombinePathDst(FilePath, Data->Materials[i].DisplacmentTexture);
+				if (strcmp(Data->Materials[i].HeightTexture, "NoTexture") != 0		&& Data->Materials[i].HeightTexture[1] != ':')		WaveCombinePathDst(FilePath, Data->Materials[i].HeightTexture);
+				if (strcmp(Data->Materials[i].RoughnessTexture, "NoTexture") != 0	&& Data->Materials[i].RoughnessTexture[1] != ':')	WaveCombinePathDst(FilePath, Data->Materials[i].RoughnessTexture);
+				if (strcmp(Data->Materials[i].MetallicTexture, "NoTexture") != 0	&& Data->Materials[i].MetallicTexture[1] != ':')	WaveCombinePathDst(FilePath, Data->Materials[i].MetallicTexture);
+				if (strcmp(Data->Materials[i].SheenTexture, "NoTexture") != 0		&& Data->Materials[i].SheenTexture[1] != ':')		WaveCombinePathDst(FilePath, Data->Materials[i].SheenTexture);
+				if (strcmp(Data->Materials[i].NormalTexture, "NoTexture") != 0		&& Data->Materials[i].NormalTexture[1] != ':')		WaveCombinePathDst(FilePath, Data->Materials[i].NormalTexture);
 			}
 		}
 	}
@@ -1227,9 +1306,9 @@ WaveModelData WaveLoadSTL(const char* FilePath, size_t Length, char* Buffer, uin
 	return ModelData;
 }
 
-typedef struct WaveGLTFArrayType WaveGLTFArray;
-typedef struct WaveGLTFObjectType WaveGLTFObject;
-
+//typedef struct WaveGLTFArrayType WaveGLTFArray;
+//typedef struct WaveGLTFObjectType WaveGLTFObject;
+/*
 typedef struct
 {
 	char* Name;
@@ -1240,15 +1319,6 @@ typedef struct
 	WaveGLTFObject* Object;
 	WaveGLTFArray* Array;
 } WaveGLTFDataTypes;
-
-typedef enum
-{
-	WAVE_JSON_DATA_TYPE_OBJECT = 0x0,
-	WAVE_JSON_DATA_TYPE_ARRAY = 0x1,
-	WAVE_JSON_DATA_TYPE_STRING = 0x2,
-	WAVE_JSON_DATA_TYPE_BOOLEAN = 0x3,
-	WAVE_JSON_DATA_TYPE_NUMBER = 0x4,
-} WaveJsonDataType;
 
 struct WaveGLTFObjectType
 {
@@ -1263,6 +1333,17 @@ struct WaveGLTFArrayType
 	uint32_t DataCount;
 	WaveGLTFDataTypes* Data;
 };
+*/
+typedef enum
+{
+	WAVE_JSON_DATA_TYPE_OBJECT = 0x0,
+	WAVE_JSON_DATA_TYPE_ARRAY = 0x1,
+	WAVE_JSON_DATA_TYPE_STRING = 0x2,
+	WAVE_JSON_DATA_TYPE_BOOLEAN = 0x3,
+	WAVE_JSON_DATA_TYPE_NUMBER = 0x4,
+} WaveJsonDataType;
+
+
 
 
 #define WAVE_GLTF_DEFAULT_STR_LENGTH 64
@@ -1371,11 +1452,175 @@ char WaveGetJsonDataType(size_t* Index, char* Buffer)
 			DataType = WAVE_JSON_DATA_TYPE_NUMBER;
 			break;
 		}
+		else if (Buffer[i] == ',')
+			break;
+
 		i++;
 	}
 	*Index = i;
 
 	return DataType;
+}
+
+typedef struct
+{
+	char Array;
+	char Name[64];
+	void* PrevObject;
+} WaveGLTFObject;
+
+#define WAVE_GLTF_ALLOCATION_COUNT 64
+
+typedef struct
+{
+	size_t i;
+	size_t Length;
+	const char* Buffer; 
+	char NextName[64];
+
+	uint32_t ObjectCount;
+	uint32_t ObjectSize;
+	WaveGLTFObject* Objects; 
+	WaveGLTFObject* CurObject;
+} WaveGLTFInfo;
+
+void ParseRecursion(WaveGLTFInfo* Inf)
+{
+//	printf("Hey\n");
+	for (Inf->i; Inf->i < Inf->Length; Inf->i++)
+	{
+		if (Inf->Buffer[Inf->i] == '"')
+		{
+			//Get name for next object or string
+			
+			Inf->i++;
+			uint16_t j = 0;
+			for (j; j < 64; j++)//assume all strings are max 64, make this dynamic
+			{
+				if (Inf->Buffer[Inf->i] == '"')
+					break;
+				Inf->NextName[j] = Inf->Buffer[Inf->i++];
+			}
+			Inf->NextName[j] = '\0';
+			Inf->i++;
+			ParseRecursion(Inf);
+		}
+		else if (Inf->Buffer[Inf->i] == '{')
+		{
+			//Add new Object and make this current, check for overflow
+			char IsInArray = Inf->CurObject->Array;
+			
+			Inf->CurObject = &Inf->Objects[Inf->ObjectCount++];
+
+			Inf->CurObject->PrevObject = &Inf->Objects[Inf->ObjectCount - 1];
+			if (IsInArray)
+				strcpy(Inf->CurObject->Name, "Default");
+			else
+				strcpy(Inf->CurObject->Name, Inf->NextName);
+			printf("Object %d: %s\n", (Inf->ObjectCount - 1), Inf->CurObject->Name);
+		}
+		else if (Inf->Buffer[Inf->i] == '[')
+		{
+			//treat array the same as an object
+			Inf->CurObject = &Inf->Objects[Inf->ObjectCount++];
+
+			Inf->CurObject->Array = 1;
+			Inf->CurObject->PrevObject = &Inf->Objects[Inf->ObjectCount - 1];
+			strcpy(Inf->CurObject->Name, Inf->NextName);
+			printf("Array %d: %s\n", (Inf->ObjectCount - 1), Inf->CurObject->Name);
+		}
+		else if (Inf->Buffer[Inf->i] == '}' ||
+				 Inf->Buffer[Inf->i] == ']')
+		{
+			//Make previous object current;
+		//	printf("wtf\n");
+			if (Inf->CurObject->PrevObject == NULL)
+				break; //Json parsing finished or something wrong
+
+			WaveGLTFObject* ObjTmp = (WaveGLTFObject*)Inf->CurObject->PrevObject;
+			Inf->CurObject = ObjTmp;
+		}
+	//	else if (Inf->Buffer[Inf->i] == 't' || Inf->Buffer[Inf->i] == 'f')
+	//	{
+	//		//Add boolean to current object
+	//	}
+
+	}
+}
+
+size_t WaveParseJson(const char* Buffer, size_t Length)
+{
+	WaveGLTFInfo Inf;
+
+	Inf.Length = Length;
+	Inf.Buffer = Buffer;
+	Inf.ObjectCount = 1;
+	Inf.ObjectSize = WAVE_GLTF_ALLOCATION_COUNT;
+	Inf.Objects = (WaveGLTFObject*)malloc(Inf.ObjectSize * sizeof(WaveGLTFObject));
+
+	Inf.CurObject = &Inf.Objects[0];
+
+	Inf.i = 0;
+	for (Inf.i; Inf.i < Length; Inf.i++)
+	{
+		if (Buffer[Inf.i] != '{')
+		{
+			Inf.i++;
+			break;
+		}
+	}
+			
+
+	//Init first default object
+	Inf.CurObject->Array = 0;
+	strcpy(Inf.CurObject->Name, "Default");
+	Inf.CurObject->PrevObject = NULL;
+
+	ParseRecursion(&Inf);
+//	printf("%s\n", Buffer + Inf.i);
+	/*
+	* for (i; i < Length; i++)
+	{
+		if (Buffer[i] == '"')
+		{
+			//Get name for next object or string
+			uint16_t j = 0;
+			for (i++; i < 64; i++)
+			{
+				if (Buffer[i] == '"')
+					break;
+				NextName[j++] = Buffer[i];
+			}
+				
+		}
+		else if (Buffer[i] == '{')
+		{
+			//Add new Object and make this current
+		}
+		else if (Buffer[i] == '}')
+		{
+			//Make previous object current;
+			printf("wtf\n");
+			if (CurObject->PrevObject == NULL)
+				break; //Json parsing finished or something wrong
+
+			WaveGLTFObject* ObjTmp = (WaveGLTFObject*)CurObject->PrevObject;
+			CurObject = ObjTmp;
+		}
+		else if (Buffer[i] == 't' || Buffer[i] == 'f')
+		{
+			//Add boolean to current object
+		}
+		
+	}
+	*/
+
+	return Inf.i;
+}
+
+void WaveParseBas64(const char* Buffer, size_t Length)
+{
+
 }
 
 WaveModelData WaveLoadGLTF(const char* FilePath, size_t Length, char* Buffer, uint32_t Settings)
@@ -1386,6 +1631,26 @@ WaveModelData WaveLoadGLTF(const char* FilePath, size_t Length, char* Buffer, ui
 	ModelData.MeshCount = 0;
 	ModelData.Meshes = (WaveMeshData*)malloc(ModelData.MeshCount * sizeof(WaveMeshData));
 	
+	size_t JsonLength = Length;
+	char* JsonPTR = Buffer;
+	/*
+	if (Buffer[0] == 'g' &&
+		Buffer[1] == 'l' &&
+		Buffer[2] == 'T' &&
+		Buffer[3] == 'F')
+	{
+		JsonPTR = Buffer + 16;
+		JsonLength -= 16;
+	}
+	*/
+
+	size_t Offset = WaveParseJson(JsonPTR, JsonLength);
+//	if (Offset < Length)
+//		printf("%s\n", Buffer + Offset);
+
+	size_t Base64Length = 0;
+	char* Base64PTR = NULL;
+	/*
 	uint32_t ObjectCount = 0;
 	uint32_t ObjectsAllocated = WAVE_GLTF_DEFAULT_STR_LENGTH;
 	WaveGLTFObject* Objects = (WaveGLTFObject*)malloc(ObjectsAllocated * sizeof(WaveGLTFObject));
@@ -1432,7 +1697,7 @@ WaveModelData WaveLoadGLTF(const char* FilePath, size_t Length, char* Buffer, ui
 	printf("Decode: %s\n", WaveBase64Decode("AACAPwAAgD8AAIC/AACAPwAAgD8AAIC/AACAPwAAgD8AAIC/AACAPwAAgL8AAIC/AACAPwAAgL8AAIC/AACAPwAAgL8AAIC/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgL8AAIA/AACAPwAAgL8AAIA/AACAPwAAgL8AAIA/AACAvwAAgD8AAIC/AACAvwAAgD8AAIC/AACAvwAAgD8AAIC/AACAvwAAgL8AAIC/AACAvwAAgL8AAIC/AACAvwAAgL8AAIC/AACAvwAAgD8AAIA/AACAvwAAgD8AAIA/AACAvwAAgD8AAIA/AACAvwAAgL8AAIA/AACAvwAAgL8AAIA/AACAvwAAgL8AAIA/AAAAAAAAAAAAAIC/AAAAAAAAgD8AAACAAACAPwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIC/AACAPwAAAAAAAACAAAAAAAAAAAAAAIA/AAAAAAAAgD8AAACAAACAPwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIA/AACAPwAAAAAAAACAAACAvwAAAAAAAACAAAAAAAAAAAAAAIC/AAAAAAAAgD8AAACAAACAvwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIC/AACAvwAAAAAAAACAAAAAAAAAAAAAAIA/AAAAAAAAgD8AAACAAACAvwAAAAAAAACAAAAAAAAAgL8AAACAAAAAAAAAAAAAAIA/AAAgPwAAAD8AACA/AAAAPwAAID8AAAA/AADAPgAAAD8AAMA+AAAAPwAAwD4AAAA/AAAgPwAAgD4AACA/AACAPgAAID8AAIA+AADAPgAAgD4AAMA+AACAPgAAwD4AAIA+AAAgPwAAQD8AACA/AABAPwAAYD8AAAA/AADAPgAAQD8AAAA+AAAAPwAAwD4AAEA/AAAgPwAAgD8AACA/AAAAAAAAYD8AAIA+AADAPgAAgD8AAAA+AACAPgAAwD4AAAAAAQAOABQAAQAUAAcACgAGABMACgATABcAFQASAAwAFQAMAA8AEAADAAkAEAAJABYABQACAAgABQAIAAsAEQANAAAAEQAAAAQA", 1120, &j));
 
 	free(TempName);
-
+	*/
 	return ModelData;
 }
 
@@ -1475,7 +1740,8 @@ WaveModelData WaveLoadModel(const char* Path, uint32_t Settings)
 	else if (strcmp(Extension + 1, "stl") == 0)
 		ModelData = WaveLoadSTL(FilePath, FileSize, Buffer, Settings);
 
-	else if (strcmp(Extension + 1, "gltf") == 0)
+	else if (strcmp(Extension + 1, "gltf") == 0 ||
+			 strcmp(Extension + 1, "glb") == 0)
 		ModelData = WaveLoadGLTF(FilePath, FileSize, Buffer, Settings);
 	else
 		printf("%s format is not supported\n", Extension + 1);

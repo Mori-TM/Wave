@@ -1466,6 +1466,7 @@ typedef struct
 {
 	char Array;
 	char Name[64];
+	uint32_t Index;
 	void* PrevObject;
 } WaveGLTFObject;
 
@@ -1487,6 +1488,8 @@ typedef struct
 void ParseRecursion(WaveGLTFInfo* Inf)
 {
 //	printf("Hey\n");
+	uint32_t Allignment = 0;
+
 	for (Inf->i; Inf->i < Inf->Length; Inf->i++)
 	{
 		if (Inf->Buffer[Inf->i] == '"')
@@ -1511,13 +1514,20 @@ void ParseRecursion(WaveGLTFInfo* Inf)
 			char IsInArray = Inf->CurObject->Array;
 			
 			Inf->CurObject = &Inf->Objects[Inf->ObjectCount++];
+			
 
+		//	Inf->CurObject->Index = Inf->ObjectCount - 1;
 			Inf->CurObject->PrevObject = &Inf->Objects[Inf->ObjectCount - 1];
 			if (IsInArray)
 				strcpy(Inf->CurObject->Name, "Default");
 			else
 				strcpy(Inf->CurObject->Name, Inf->NextName);
+
+			for (uint32_t k = 0; k < Allignment; k++)
+				printf("\t");
 			printf("Object %d: %s\n", (Inf->ObjectCount - 1), Inf->CurObject->Name);
+
+			Allignment++;
 		}
 		else if (Inf->Buffer[Inf->i] == '[')
 		{
@@ -1525,9 +1535,16 @@ void ParseRecursion(WaveGLTFInfo* Inf)
 			Inf->CurObject = &Inf->Objects[Inf->ObjectCount++];
 
 			Inf->CurObject->Array = 1;
+		//	Inf->CurObject->Index = Inf->ObjectCount - 1;
 			Inf->CurObject->PrevObject = &Inf->Objects[Inf->ObjectCount - 1];
 			strcpy(Inf->CurObject->Name, Inf->NextName);
+			
+
+			for (uint32_t k = 0; k < Allignment; k++)
+				printf("\t");
 			printf("Array %d: %s\n", (Inf->ObjectCount - 1), Inf->CurObject->Name);
+
+			Allignment++;
 		}
 		else if (Inf->Buffer[Inf->i] == '}' ||
 				 Inf->Buffer[Inf->i] == ']')
@@ -1537,8 +1554,11 @@ void ParseRecursion(WaveGLTFInfo* Inf)
 			if (Inf->CurObject->PrevObject == NULL)
 				break; //Json parsing finished or something wrong
 
+		//	Inf->CurObject->Index
 			WaveGLTFObject* ObjTmp = (WaveGLTFObject*)Inf->CurObject->PrevObject;
 			Inf->CurObject = ObjTmp;
+			if (Allignment > 0)
+				Allignment--;
 		}
 	//	else if (Inf->Buffer[Inf->i] == 't' || Inf->Buffer[Inf->i] == 'f')
 	//	{
